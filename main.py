@@ -1,19 +1,16 @@
 from PySide6.QtWidgets import (
     QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QLineEdit, QComboBox, QFileDialog, QMessageBox
+    QLabel, QLineEdit, QComboBox, QFileDialog, QMessageBox, QButtonGroup
 )
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush
-from PySide6.QtCore import Qt, QRectF, QPointF
+from PySide6.QtCore import Qt, QRectF, QPointF, Signal
 import sys
 import json
 
+grab_def_offset = 3
 
 class GraphicObject:
     def __init__(self, kind, params, color=(0, 0, 0)):
-        # kind: 'line', 'rect', 'circle'
-        # params: for line: [x1,y1,x2,y2]
-        # for rect: [x,y,w,h]
-        # for circle: [cx,cy,r]
         self.kind = kind
         self.params = params
         self.color = color
@@ -28,12 +25,11 @@ class GraphicObject:
 
 
 class Canvas(QWidget):
-    HANDLE_SIZE = 6
-
+    tool_changed = Signal(str)
     def __init__(self, parent=None):
         super().__init__(parent)
         self.objects = []
-        self.current_tool = 'select'  # or 'line','rect','circle'
+        self.current_tool = 'select'
         self.drawing = False
         self.start_pos = None
         self.temp_obj = None
@@ -62,7 +58,6 @@ class Canvas(QWidget):
                 painter.drawEllipse(QPointF(cx, cy), r, r)
             if obj.selected:
                 self.draw_handles(painter, obj)
-        # draw temp object
         if self.temp_obj:
             pen = QPen(QColor(*self.temp_obj.color))
             pen.setStyle(Qt.DashLine)
@@ -84,14 +79,14 @@ class Canvas(QWidget):
         if obj.kind == 'line':
             x1, y1, x2, y2 = obj.params
             for px, py in [(x1, y1), (x2, y2)]:
-                painter.drawRect(px - 3, py - 3, 6, 6)
+                painter.drawRect(px - grab_def_offset, py - grab_def_offset, grab_def_offset * 2, grab_def_offset * 2)
         elif obj.kind == 'rect':
             x, y, w, h = obj.params
             for px, py in [(x, y), (x + w, y), (x, y + h), (x + w, y + h)]:
-                painter.drawRect(px - 3, py - 3, 6, 6)
+                painter.drawRect(px - grab_def_offset, py - grab_def_offset, grab_def_offset * 2, grab_def_offset * 2)
         elif obj.kind == 'circle':
             cx, cy, r = obj.params
-            painter.drawRect(cx + r - 3, cy - 3, 6, 6)
+            painter.drawRect(cx + r - grab_def_offset, cy - grab_def_offset, grab_def_offset * 2, grab_def_offset * 2)
 
     def mousePressEvent(self, event):
         pos = event.position()
@@ -101,11 +96,10 @@ class Canvas(QWidget):
                 obj = self.find_object_at(x, y)
                 if obj:
                     self.select_object(obj)
-                    # check handles
                     handle = self.find_handle_at(obj, x, y)
                     if handle:
                         self.resizing = True
-                        self.resize_handle = handle
+                        self.resize_handle = handle # for a circle it should be in a different spot
                     else:
                         self.dragging = True
                         px = self.obj_pos(obj)
@@ -113,7 +107,6 @@ class Canvas(QWidget):
                 else:
                     self.clear_selection()
             else:
-                # start drawing
                 self.drawing = True
                 self.start_pos = (x, y)
                 color = (0, 0, 0)
@@ -141,7 +134,6 @@ class Canvas(QWidget):
                 self.temp_obj.params = [sx, sy, r]
             self.update()
         elif self.dragging and self.selected_obj:
-            # move object
             nx = x - self.drag_offset.x()
             ny = y - self.drag_offset.y()
             self.move_object_to(self.selected_obj, nx, ny)
@@ -158,9 +150,12 @@ class Canvas(QWidget):
             self.objects.append(self.temp_obj)
             self.temp_obj = None
             self.drawing = False
+            self.start_pos = None
         self.dragging = False
+        self.drag_offset = None
         self.resizing = False
         self.resize_handle = None
+        self.set_tool("select")
         self.update()
 
     def find_object_at(self, x, y):
@@ -168,41 +163,37 @@ class Canvas(QWidget):
         for obj in reversed(self.objects):
             if obj.kind == 'line':
                 x1, y1, x2, y2 = obj.params
-                # bounding box hit
-                rect = QRectF(min(x1, x2)-5, min(y1, y2)-5, abs(x2-x1)+10, abs(y2-y1)+10) # TODO this will be very big 
-                # if the line is skewed
+                rect = QRectF(min(x1, x2)-grab_def_offset, min(y1, y2)-grab_def_offset, abs(x2-x1)+grab_def_offset * 2, abs(y2-y1)+grab_def_offset * 2) # TODO this will be very big if the line is skewed!!!
                 if rect.contains(x, y):
                     return obj
             elif obj.kind == 'rect':
                 rx, ry, w, h = obj.params
-                rect = QRectF(rx, ry, w, h)
+                rect = QRectF(rx - grab_def_offset, ry - grab_def_offset, w + grab_def_offset * 2, h + grab_def_offset * 2)
                 if rect.contains(x, y):
                     return obj
             elif obj.kind == 'circle':
                 cx, cy, r = obj.params
-                if (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2:
+                if (x - cx) ** 2 + (y - cy) ** 2 <= (r + grab_def_offset) ** 2:
                     return obj
         return None
 
     def find_handle_at(self, obj, x, y):
-        # return handle id or None
-        s = 3
         if obj.kind == 'line':
             x1, y1, x2, y2 = obj.params
-            if abs(x - x1) <= s and abs(y - y1) <= s:
+            if abs(x - x1) <= grab_def_offset and abs(y - y1) <= grab_def_offset:
                 return ('line', 0)
-            if abs(x - x2) <= s and abs(y - y2) <= s:
+            if abs(x - x2) <= grab_def_offset and abs(y - y2) <= grab_def_offset:
                 return ('line', 1)
         elif obj.kind == 'rect':
             rx, ry, w, h = obj.params
             corners = [(rx, ry), (rx + w, ry), (rx, ry + h), (rx + w, ry + h)]
             for i, (px, py) in enumerate(corners):
-                if abs(x - px) <= s and abs(y - py) <= s:
+                if abs(x - px) <= grab_def_offset and abs(y - py) <= grab_def_offset:
                     return ('rect', i)
         elif obj.kind == 'circle':
             cx, cy, r = obj.params
             hx, hy = cx + r, cy
-            if abs(x - hx) <= s and abs(y - hy) <= s:
+            if abs(x - hx) <= grab_def_offset and abs(y - hy) <= grab_def_offset:
                 return ('circle', 0)
         return None
 
@@ -252,15 +243,18 @@ class Canvas(QWidget):
             rx, ry, w, h = obj.params
             corners = [(rx, ry), (rx + w, ry), (rx, ry + h), (rx + w, ry + h)]
             corners[idx] = (x, y)
-            x0, y0 = corners[0]
-            x1, y1 = corners[3]
+            if idx == 0 or idx == 3:
+                x0, y0 = corners[0]
+                x1, y1 = corners[3] # change it so that we can't move beyond the second side!
+            else:
+                x0, y0 = corners[1]
+                x1, y1 = corners[2]
             obj.params = [min(x0, x1), min(y0, y1), abs(x1 - x0), abs(y1 - y0)]
         elif obj.kind == 'circle' and kind == 'circle':
             cx, cy, r = obj.params
             new_r = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
             obj.params[2] = new_r
 
-    # text-based creation/updating
     def add_object_from_text(self, kind, params_text):
         try:
             parts = [float(p.strip()) for p in params_text.split(',') if p.strip()]
@@ -313,12 +307,18 @@ class Canvas(QWidget):
         self.objects = [GraphicObject.from_dict(a) for a in arr]
         self.update()
 
+    def set_tool(self, tool):
+        self.current_tool = tool
+        self.tool_changed.emit(tool)
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('Primitives Editor - PySide6')
         self.canvas = Canvas()
+        self.main_options_button_group = QButtonGroup(self)
+        self.main_options_button_group.setExclusive(True)
+        self.canvas.tool_changed.connect(self.update_button_state)
 
         self.init_ui()
 
@@ -334,6 +334,7 @@ class MainWindow(QMainWindow):
             if t == 'select':
                 b.setChecked(True)
             b.clicked.connect(lambda checked, tt=t: self.set_tool(tt))
+            self.main_options_button_group.addButton(b)
             toolbar.addWidget(b)
         v.addLayout(toolbar)
 
@@ -389,6 +390,10 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, 'Open JSON', filter='JSON Files (*.json)')
         if path:
             self.canvas.load_from_file(path)
+    
+    def update_button_state(self, tool):
+        for b in self.main_options_button_group.buttons():
+            b.setChecked(b.text().lower() == tool)
 
 
 if __name__ == '__main__':
