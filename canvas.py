@@ -18,6 +18,7 @@ class Canvas(QWidget):
         self.drawing = False
         self.start_pos = None
         self.temp_obj = None
+        self.temp_obj_color = None
         self.selected_obj = None
         self.dragging = False
         self.drag_offset = QPointF(0, 0)
@@ -94,7 +95,7 @@ class Canvas(QWidget):
             else:
                 self.drawing = True
                 self.start_pos = (x, y)
-                color = (0, 0, 0)
+                color = self.temp_obj_color.getRgb()[:3]
                 if self.current_tool == 'line':
                     self.temp_obj = GraphicalObject('line', [x, y, x, y], color)
                 elif self.current_tool == 'rect':
@@ -148,7 +149,7 @@ class Canvas(QWidget):
         for obj in reversed(self.objects):
             if obj.kind == 'line':
                 x1, y1, x2, y2 = obj.params
-                rect = QRectF(min(x1, x2)-grab_def_offset, min(y1, y2)-grab_def_offset, abs(x2-x1)+grab_def_offset * 2, abs(y2-y1)+grab_def_offset * 2)
+                rect = QRectF(min(x1, x2)-grab_def_offset * 2, min(y1, y2)-grab_def_offset * 2, abs(x2-x1)+grab_def_offset * 4, abs(y2-y1)+grab_def_offset * 4)
                 if rect.contains(x, y):
                     return obj
             elif obj.kind == 'rect':
@@ -240,25 +241,25 @@ class Canvas(QWidget):
             new_r = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
             obj.params[2] = new_r
 
-    def add_object_from_text(self, kind, params_text):
+    def add_object_from_text(self, kind, params_text, color):
         try:
             parts = [float(p.strip()) for p in params_text.split(',') if p.strip()]
         except Exception:
             QMessageBox.warning(self, 'Params error', 'Invalid numeric parameters')
             return
         if kind == 'line' and len(parts) == 4:
-            obj = GraphicalObject('line', parts)
+            obj = GraphicalObject('line', parts, color)
         elif kind == 'rect' and len(parts) == 4:
-            obj = GraphicalObject('rect', parts)
+            obj = GraphicalObject('rect', parts, color)
         elif kind == 'circle' and len(parts) == 3:
-            obj = GraphicalObject('circle', parts)
+            obj = GraphicalObject('circle', parts, color)
         else:
             QMessageBox.warning(self, 'Params error', 'Wrong number of params for kind')
             return
         self.objects.append(obj)
         self.update()
 
-    def update_selected_from_text(self, params_text):
+    def update_selected_from_text(self, params_text, color):
         if not self.selected_obj:
             QMessageBox.information(self, 'No selection', 'Select an object first')
             return
@@ -270,10 +271,15 @@ class Canvas(QWidget):
         kind = self.selected_obj.kind
         if kind == 'line' and len(parts) == 4:
             self.selected_obj.params = parts
+            self.selected_obj.color = color
         elif kind == 'rect' and len(parts) == 4:
             self.selected_obj.params = parts
+            self.selected_obj.color = color
         elif kind == 'circle' and len(parts) == 3:
             self.selected_obj.params = parts
+            self.selected_obj.color = color
+        elif len(parts) == 0 and self.selected_obj.color != color:
+            self.selected_obj.color = color
         else:
             QMessageBox.warning(self, 'Params error', 'Wrong number of params for selected kind')
             return
@@ -295,3 +301,6 @@ class Canvas(QWidget):
     def set_tool(self, tool):
         self.current_tool = tool
         self.tool_changed.emit(tool)
+
+    def set_drawing_color_for_new(self, color):
+        self.temp_obj_color = color

@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
      QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QSlider
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPainter, QColor
 
 slider_style_sheet = """
@@ -67,6 +67,7 @@ class ColorPatch(QWidget):
         painter.fillRect(self.rect(), self.color)
 
 class ColorPicker(QWidget):
+    color_changed = Signal(QColor)
     def __init__(self):
         super().__init__()
         main_layout = QHBoxLayout(self)
@@ -75,11 +76,10 @@ class ColorPicker(QWidget):
         self.all_switches = {}
 
         self.color_preview = ColorPatch()
-        rgb_layout.addWidget(self.color_preview)
 
         for color in rgb_set:
             h = QHBoxLayout()
-            h.setSpacing(5)
+            h.setSpacing(0)
             label = QLabel(color)
             slider = QSlider(Qt.Horizontal)
             slider.setRange(0, 255)
@@ -116,6 +116,7 @@ class ColorPicker(QWidget):
             self.all_switches[color] = (slider, edit)
 
         main_layout.addLayout(cmyk_layout)
+        main_layout.addWidget(self.color_preview)
 
     def update_the_other_system(self, current):
         if current in rgb_set:
@@ -152,7 +153,9 @@ class ColorPicker(QWidget):
         r = self.all_switches['R'][0].value()
         g = self.all_switches['G'][0].value()
         b = self.all_switches['B'][0].value()
-        self.color_preview.set_color(QColor(r, g, b))
+        color = QColor(r, g, b)
+        self.color_preview.set_color(color)
+        self.color_changed.emit(color)
 
     def handle_slider_updated(self, c, val):
         slider, edit = self.all_switches[c]

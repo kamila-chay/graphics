@@ -61,22 +61,25 @@ class MainWindow(QMainWindow):
         self.params_edit.setPlaceholderText('param1, param2...')
         self.params_edit.editingFinished.connect(self.params_edit.clearFocus)
         basic_params_layout.addWidget(self.params_edit)
-        params_layout.addLayout(basic_params_layout)
-
-        # colors
-        self.color_picker = ColorPicker()
-        params_layout.addWidget(self.color_picker)
 
         # buttons
-        confirm_buttons_layout = QVBoxLayout()
+        confirm_buttons_layout = QHBoxLayout()
         confirm_buttons_layout.setSpacing(10)
+        confirm_buttons_layout.setContentsMargins(0, 0, 0, 0)
         add_btn = QPushButton('Add')
         add_btn.clicked.connect(self.add_from_text)
         confirm_buttons_layout.addWidget(add_btn)
         update_btn = QPushButton('Update selected')
         update_btn.clicked.connect(self.update_selected)
         confirm_buttons_layout.addWidget(update_btn)
-        params_layout.addLayout(confirm_buttons_layout)
+        basic_params_layout.addLayout(confirm_buttons_layout)
+
+        params_layout.addLayout(basic_params_layout)
+
+        # colors
+        self.color_picker = ColorPicker()
+        params_layout.addWidget(self.color_picker)
+
         v.addLayout(params_layout)
 
         # save/load
@@ -89,7 +92,9 @@ class MainWindow(QMainWindow):
         sl_layout.addWidget(load_btn)
         v.addLayout(sl_layout)
 
-        v.addWidget(self.canvas)
+        v.addWidget(self.canvas, stretch=1)
+
+        self.color_picker.color_changed.connect(self.canvas.set_drawing_color_for_new)
         self.resize(900, 600)
 
     def set_tool(self, tool):
@@ -98,11 +103,18 @@ class MainWindow(QMainWindow):
     def add_from_text(self):
         kind = self.kind_combo.currentText()
         txt = self.params_edit.text()
-        self.canvas.add_object_from_text(kind, txt)
+        color_switches = self.color_picker.all_switches
+        color_val = (color_switches["R"][0].value(), color_switches["G"][0].value(), color_switches["B"][0].value())
+        self.canvas.add_object_from_text(kind, txt, color_val)
+        self.params_edit.setText("")
+
 
     def update_selected(self):
         txt = self.params_edit.text()
-        self.canvas.update_selected_from_text(txt)
+        color_switches = self.color_picker.all_switches
+        color_val = (color_switches["R"][0].value(), color_switches["G"][0].value(), color_switches["B"][0].value())
+        self.canvas.update_selected_from_text(txt, color_val)
+        self.params_edit.setText("")
 
     def save_file(self):
         path, _ = QFileDialog.getSaveFileName(self, 'Save JSON', filter='JSON Files (*.json)')
