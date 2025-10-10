@@ -20,6 +20,38 @@ slider_style_sheet = """
     }
 """
 
+cmyk_set = ["C", "M", "Y", "K"]
+rgb_set = ["R", "G", "B"]
+
+def rgb_to_cmyk(r, g, b):
+    r_norm, g_norm, b_norm = r/255, g/255, b/255
+    k = 1 - max(r_norm, g_norm, b_norm)
+    
+    if k < 1:
+        c = (1 - r_norm - k) / (1 - k)
+        m = (1 - g_norm - k) / (1 - k)
+        y = (1 - b_norm - k) / (1 - k)
+    else:
+        c = 0
+        m = 0
+        y = 0
+    
+    c = round(100 * c)
+    m = round(100 * m)
+    y = round(100 * y)
+    k = round(100 * k)
+    return c, m, y, k
+
+def cmyk_to_rgb(c, m, y, k):
+    c = c / 100
+    m = m / 100
+    y = y / 100
+    k = k / 100
+    r = round(255 * (1 - c) * (1 - k))
+    g = round(255 * (1 - m) * (1 - k))
+    b = round(255 * (1 - y) * (1 - k))
+    return r, g, b
+
 class ColorPatch(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -45,7 +77,7 @@ class ColorPicker(QWidget):
         self.color_preview = ColorPatch()
         rgb_layout.addWidget(self.color_preview)
 
-        for color in ['R', 'G', 'B']:
+        for color in rgb_set:
             h = QHBoxLayout()
             h.setSpacing(5)
             label = QLabel(color)
@@ -54,8 +86,8 @@ class ColorPicker(QWidget):
             slider.setStyleSheet(slider_style_sheet)
             edit = QLineEdit("0")
             edit.setFixedWidth(35)
-            slider.valueChanged.connect(lambda val, c=color: self.update_color(c, val))
-            edit.textChanged.connect(lambda text, c=color: self.update_slider(c, text))
+            slider.valueChanged.connect(lambda val, c=color: self.handle_slider_updated(c, val))
+            edit.textChanged.connect(lambda text, c=color: self.handle_text_updated(c, text))
             h.addWidget(label)
             h.addWidget(slider)
             h.addWidget(edit)
@@ -66,7 +98,7 @@ class ColorPicker(QWidget):
         
         cmyk_layout = QVBoxLayout()
         cmyk_layout.setSpacing(0)
-        for color in ['C', 'M', 'Y', "K"]:
+        for color in cmyk_set:
             h = QHBoxLayout()
             h.setSpacing(5)
             label = QLabel(color)
@@ -75,8 +107,8 @@ class ColorPicker(QWidget):
             slider.setStyleSheet(slider_style_sheet)
             edit = QLineEdit("0")
             edit.setFixedWidth(35)
-            slider.valueChanged.connect(lambda val, c=color: self.update_color(c, val))
-            edit.textChanged.connect(lambda text, c=color: self.update_slider(c, text))
+            slider.valueChanged.connect(lambda val, c=color: self.handle_slider_updated(c, val))
+            edit.textChanged.connect(lambda text, c=color: self.handle_text_updated(c, text))
             h.addWidget(label)
             h.addWidget(slider)
             h.addWidget(edit)
@@ -85,16 +117,59 @@ class ColorPicker(QWidget):
 
         main_layout.addLayout(cmyk_layout)
 
-    def update_color(self, c, val):
-        slider, edit = self.all_switches[c]
-        edit.setText(str(val))
+    def update_the_other_system(self, current):
+        if current in rgb_set:
+            fields_to_change = cmyk_set
+            r = self.all_switches['R'][0].value()
+            g = self.all_switches['G'][0].value()
+            b = self.all_switches['B'][0].value()
+            values_to_assign = rgb_to_cmyk(r, g, b)
+            for field, value in zip(fields_to_change, values_to_assign):
+                slider, edit = self.all_switches[field]
+                slider.blockSignals(True)
+                edit.blockSignals(True)
+                slider.setValue(value)
+                edit.setText(str(value))
+                slider.blockSignals(False)
+                edit.blockSignals(False)
+        if current in cmyk_set:
+            fields_to_change = rgb_set
+            c = self.all_switches['C'][0].value()
+            m = self.all_switches['M'][0].value()
+            y = self.all_switches['Y'][0].value()
+            k = self.all_switches['K'][0].value()
+            values_to_assign = cmyk_to_rgb(c, m, y, k)
+            for field, value in zip(fields_to_change, values_to_assign):
+                slider, edit = self.all_switches[field]
+                slider.blockSignals(True)
+                edit.blockSignals(True)
+                slider.setValue(value)
+                edit.setText(str(value))
+                slider.blockSignals(False)
+                edit.blockSignals(False)
+
+    def update_preview(self):
         r = self.all_switches['R'][0].value()
         g = self.all_switches['G'][0].value()
         b = self.all_switches['B'][0].value()
         self.color_preview.set_color(QColor(r, g, b))
 
-    def update_slider(self, c, text):
-        if text.isdigit():  # more checks here
-            val = int(text)
+    def handle_slider_updated(self, c, val):
+        slider, edit = self.all_switches[c]
+        edit.blockSignals(True)
+        edit.setText(str(val))
+        edit.blockSignals(False)
+
+        self.update_the_other_system(c)
+        self.update_preview()
+
+
+    def handle_text_updated(self, c, text):
+        if text.isdigit() and (((val := int(text)) <= 100 and c in cmyk_set) or (val <= 255 and c in rgb_set)):
             slider, _ = self.all_switches[c]
+            slider.blockSignals(True)
             slider.setValue(val)
+            slider.blockSignals(False)
+
+            self.update_the_other_system(c)
+            self.update_preview()
