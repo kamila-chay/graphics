@@ -18,7 +18,7 @@ class Canvas(QWidget):
         self.drawing = False
         self.start_pos = None
         self.temp_obj = None
-        self.temp_obj_color = None
+        self.temp_obj_color = QColor(0, 0, 0)
         self.selected_obj = None
         self.dragging = False
         self.drag_offset = QPointF(0, 0)

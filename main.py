@@ -2,7 +2,7 @@ import sys
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLineEdit, QComboBox, QFileDialog, QButtonGroup
+    QLineEdit, QComboBox, QFileDialog, QButtonGroup, QTabWidget
 )
 
 from color_picker import ColorPicker
@@ -12,18 +12,24 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('Editor')
-        self.canvas = Canvas()
+        self.drawing_canvas = Canvas()
         self.main_options_button_group = QButtonGroup(self)
         self.main_options_button_group.setExclusive(True)
-        self.canvas.tool_changed.connect(self.update_button_state)
+        self.drawing_canvas.tool_changed.connect(self.update_button_state)
+        
+        tabs = QTabWidget()
+        self.figures_tab = QWidget()
+        self.init_figures_tab()
+        self.images_tab = QWidget()
+        self.init_images_tab()
 
-        self.init_ui()
+        tabs.addTab(self.figures_tab, "Figures")
+        tabs.addTab(self.images_tab, "Images")
 
-    def init_ui(self):
-        # main
-        central = QWidget()
-        self.setCentralWidget(central)
-        v = QVBoxLayout(central)
+        self.setCentralWidget(tabs)
+
+    def init_figures_tab(self):
+        v = QVBoxLayout(self.figures_tab)
         v.setContentsMargins(10, 2, 10, 2)
         v.setSpacing(3)
 
@@ -92,20 +98,33 @@ class MainWindow(QMainWindow):
         sl_layout.addWidget(load_btn)
         v.addLayout(sl_layout)
 
-        v.addWidget(self.canvas, stretch=1)
+        v.addWidget(self.drawing_canvas, stretch=1)
 
-        self.color_picker.color_changed.connect(self.canvas.set_drawing_color_for_new)
+        self.color_picker.color_changed.connect(self.drawing_canvas.set_drawing_color_for_new)
         self.resize(900, 600)
 
+    def init_images_tab(self):
+        v = QVBoxLayout(self.images_tab)
+        v.setContentsMargins(10, 2, 10, 2)
+        v.setSpacing(3)
+
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(10)
+        for t in ['load', 'save']:
+            b = QPushButton(t.capitalize())
+            # b.clicked.connect(lambda checked, tt=t: self.set_tool(tt))
+            toolbar.addWidget(b)
+        v.addLayout(toolbar)
+
     def set_tool(self, tool):
-        self.canvas.current_tool = tool
+        self.drawing_canvas.current_tool = tool
 
     def add_from_text(self):
         kind = self.kind_combo.currentText()
         txt = self.params_edit.text()
         color_switches = self.color_picker.all_switches
         color_val = (color_switches["R"][0].value(), color_switches["G"][0].value(), color_switches["B"][0].value())
-        self.canvas.add_object_from_text(kind, txt, color_val)
+        self.drawing_canvas.add_object_from_text(kind, txt, color_val)
         self.params_edit.setText("")
 
 
@@ -113,18 +132,18 @@ class MainWindow(QMainWindow):
         txt = self.params_edit.text()
         color_switches = self.color_picker.all_switches
         color_val = (color_switches["R"][0].value(), color_switches["G"][0].value(), color_switches["B"][0].value())
-        self.canvas.update_selected_from_text(txt, color_val)
+        self.drawing_canvas.update_selected_from_text(txt, color_val)
         self.params_edit.setText("")
 
     def save_file(self):
         path, _ = QFileDialog.getSaveFileName(self, 'Save JSON', filter='JSON Files (*.json)')
         if path:
-            self.canvas.save_to_file(path)
+            self.drawing_canvas.save_to_file(path)
 
     def load_file(self):
         path, _ = QFileDialog.getOpenFileName(self, 'Open JSON', filter='JSON Files (*.json)')
         if path:
-            self.canvas.load_from_file(path)
+            self.drawing_canvas.load_from_file(path)
     
     def update_button_state(self, tool):
         for b in self.main_options_button_group.buttons():
