@@ -2,11 +2,14 @@ import sys
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLineEdit, QComboBox, QFileDialog, QButtonGroup, QTabWidget
+    QLineEdit, QComboBox, QFileDialog, QButtonGroup, QTabWidget, QSlider, QLabel
 )
+
+from PySide6.QtCore import Qt
 
 from color_picker import ColorPicker
 from canvas import Canvas
+from constants import slider_style_sheet
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -16,7 +19,7 @@ class MainWindow(QMainWindow):
         self.main_options_button_group = QButtonGroup(self)
         self.main_options_button_group.setExclusive(True)
         self.drawing_canvas.tool_changed.connect(self.update_button_state)
-        
+
         tabs = QTabWidget()
         self.figures_tab = QWidget()
         self.init_figures_tab()
@@ -110,10 +113,42 @@ class MainWindow(QMainWindow):
 
         toolbar = QHBoxLayout()
         toolbar.setSpacing(10)
-        for t in ['load', 'save']:
-            b = QPushButton(t.capitalize())
-            # b.clicked.connect(lambda checked, tt=t: self.set_tool(tt))
-            toolbar.addWidget(b)
+        load_btn = QPushButton("Load")
+        load_btn.clicked.connect(self.load_image_file)
+        toolbar.addWidget(load_btn, stretch=True)
+
+        save_btn = QPushButton("Save")
+        save_btn.clicked.connect(self.save_image_file)
+        toolbar.addWidget(save_btn, stretch=True)
+        
+        label = QLabel("Save as: ")
+        toolbar.addWidget(label)
+
+        self.format_combo = QComboBox()
+        self.format_combo.addItems(['PPM3', 'PPM6', "JPEG"])
+        self.format_combo.currentTextChanged.connect(self.handle_format_changes)
+        toolbar.addWidget(self.format_combo)
+
+        self.label_compression_level = QLabel("Compression quality: ")
+        self.label_compression_level.setVisible(False)
+        toolbar.addWidget(self.label_compression_level)
+
+        self.text_compression_level = QLineEdit("80")
+        self.text_compression_level.setReadOnly(True)
+        self.text_compression_level.setVisible(False)
+        self.text_compression_level.setFixedWidth(35)
+        toolbar.addWidget(self.text_compression_level)
+
+        self.jpeg_quality_slider = QSlider(Qt.Horizontal)
+        self.jpeg_quality_slider.setRange(0, 100)
+        self.jpeg_quality_slider.setStyleSheet(slider_style_sheet)
+        self.jpeg_quality_slider.setValue(80)
+        self.jpeg_quality_slider.setTickPosition(QSlider.TicksBelow)
+        self.jpeg_quality_slider.setTickInterval(10)
+        self.jpeg_quality_slider.valueChanged.connect(self.update_text_compression_level)
+        self.jpeg_quality_slider.setVisible(False)
+        toolbar.addWidget(self.jpeg_quality_slider)
+        
         v.addLayout(toolbar)
 
     def set_tool(self, tool):
@@ -144,6 +179,25 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, 'Open JSON', filter='JSON Files (*.json)')
         if path:
             self.drawing_canvas.load_from_file(path)
+
+    def load_image_file(self):
+        pass
+
+    def save_image_file(self):
+        pass
+
+    def handle_format_changes(self, curr_new_text):
+        if curr_new_text in {"PPM3", "PPM6"}:
+            self.label_compression_level.setVisible(False)
+            self.text_compression_level.setVisible(False)
+            self.jpeg_quality_slider.setVisible(False)
+        else:
+            self.label_compression_level.setVisible(True)
+            self.text_compression_level.setVisible(True)
+            self.jpeg_quality_slider.setVisible(True)
+
+    def update_text_compression_level(self, new_value):
+        self.text_compression_level.setText(str(new_value))
     
     def update_button_state(self, tool):
         for b in self.main_options_button_group.buttons():

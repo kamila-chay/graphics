@@ -4,21 +4,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPainter, QColor
 
-slider_style_sheet = """
-    QSlider::groove:horizontal {
-        height: 6px;               
-        background: #ddd;
-        border-radius: 3px;
-    }
-
-    QSlider::handle:horizontal {
-        width: 6px;                
-        height: 12px;             
-        background: #888;
-        margin: -3px 0;           
-        border-radius: 2px;
-    }
-"""
+from constants import slider_style_sheet
 
 cmyk_set = ["C", "M", "Y", "K"]
 rgb_set = ["R", "G", "B"]
