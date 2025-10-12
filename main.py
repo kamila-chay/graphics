@@ -171,8 +171,13 @@ class MainWindow(QMainWindow):
         self.linear_scaling_slider.valueChanged.connect(self.image_canvas.handle_lin_scaling_updated)
         extra_tools.addWidget(self.linear_scaling_slider)
 
+        self.hover_over_color_vals = QLabel("0, 0, 0")
+        extra_tools.addWidget(self.hover_over_color_vals)
+
         v.addLayout(extra_tools)
-        v.addWidget(self.image_canvas)
+
+        self.image_canvas.hover_over_color.connect(self.display_hover_over_color)
+        v.addWidget(self.image_canvas, stretch=1)
 
     def set_tool(self, tool):
         self.drawing_canvas.current_tool = tool
@@ -251,11 +256,13 @@ class MainWindow(QMainWindow):
         for b in self.main_options_button_group.buttons():
             b.setChecked(b.text().lower() == tool)
 
+    def display_hover_over_color(self, r, g, b):
+        self.hover_over_color_vals.setText(f"{r}, {g}, {b}")
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     w = MainWindow()
     w.show()
     sys.exit(app.exec())
-
-    # Powiększanie obrazu i przy dużym powiększeniu możliwość przesuwania oraz wyświetlanie wartości pikseli R,G,B na każdym widocznym pikselu,
+    

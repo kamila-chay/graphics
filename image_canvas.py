@@ -1,28 +1,34 @@
 from PySide6.QtWidgets import QWidget
 from PySide6.QtGui import QImage, QPainter, QColor
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QPoint, QEvent, Signal
 
 from load_ppm_jpg import load_ppm
 import numpy as np
 
 class ImageCanvas(QWidget):
+    hover_over_color = Signal(int, int, int)
     def __init__(self, parent=None):
         super().__init__()
         self.image = None
         self.modified_image = None
+        self.scaled = None
+        self.scale = 1.0
+        self.offset = QPoint(0, 0)
+        self.last_mouse_pos = None
+        self.x = None
+        self.y = None
+        self.setMouseTracking(True)
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        if self.modified_image:
-            scaled = self.modified_image.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            x = (self.width() - scaled.width()) / 2
-            y = (self.height() - scaled.height()) / 2
-            painter.drawImage(x, y, scaled)
-        elif self.image:
-            scaled = self.image.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            x = (self.width() - scaled.width()) / 2
-            y = (self.height() - scaled.height()) / 2
-            painter.drawImage(x, y, scaled)
+        painter.translate(self.offset)
+        painter.scale(self.scale, self.scale)
+        current_image = self.modified_image if self.modified_image else self.image
+        if current_image:
+            self.scaled = current_image.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.x = (self.width() - self.scaled.width()) / 2
+            self.y = (self.height() - self.scaled.height()) / 2
+            painter.drawImage(self.x, self.y, self.scaled)
 
     def load_from_file(self, path): 
         if path.lower().endswith(".ppm"):
@@ -30,7 +36,10 @@ class ImageCanvas(QWidget):
         else:
             self.image = QImage(path)
         self.modified_image = None
+        self.scale = 1.0
+        self.offset = QPoint(0, 0)
         self.update()
+        self.hover_over_color.emit(0, 0, 0)
 
     def handle_lin_scaling_updated(self, new_scaling_value):
         if self.image:
@@ -44,3 +53,35 @@ class ImageCanvas(QWidget):
                     b = min(int(color.blue() * factor), 255)
                     self.modified_image.setPixelColor(x, y, QColor(r, g, b))
             self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.last_mouse_pos = event.pos()
+
+    def mouseMoveEvent(self, event):
+        if self.last_mouse_pos:
+            delta = event.pos() - self.last_mouse_pos
+            self.offset += delta
+            self.last_mouse_pos = event.pos()
+            self.update()
+        if self.image:
+            x = ((event.pos().x() - self.offset.x()) / self.scale) - self.x
+            y = ((event.pos().y() - self.offset.y()) / self.scale) - self.y
+            if x >= 0 and x < self.scaled.width() and y >= 0 and y < self.scaled.height():
+                color = QColor(self.scaled.pixel(x, y))
+                self.hover_over_color.emit(color.red(), color.green(), color.blue())
+
+    def mouseReleaseEvent(self, event):
+        self.last_mouse_pos = None
+
+    def event(self, event):
+        if event.type() == QEvent.NativeGesture:
+            if event.gestureType() == Qt.ZoomNativeGesture:
+                self.handle_zoom(event.value())
+                return True  # prevent further handling
+        return super().event(event)
+    
+    def handle_zoom(self, delta):
+        factor = 1 + delta * 0.1
+        self.scale *= factor
+        self.update()
