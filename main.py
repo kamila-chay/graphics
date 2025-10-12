@@ -153,6 +153,25 @@ class MainWindow(QMainWindow):
         
         v.addLayout(toolbar)
 
+        extra_tools = QHBoxLayout()
+        extra_tools.setSpacing(10)
+
+        self.linear_scaling_label = QLineEdit("1")
+        self.linear_scaling_label.setReadOnly(True)
+        self.linear_scaling_label.setFixedWidth(35)
+        extra_tools.addWidget(self.linear_scaling_label)
+
+        self.linear_scaling_slider = QSlider(Qt.Horizontal)
+        self.linear_scaling_slider.setRange(1, 100) # 0.1 - 10.0
+        self.linear_scaling_slider.setStyleSheet(slider_style_sheet)
+        self.linear_scaling_slider.setValue(10)
+        self.linear_scaling_slider.setTickPosition(QSlider.TicksBelow)
+        self.linear_scaling_slider.setTickInterval(1)
+        self.linear_scaling_slider.valueChanged.connect(self.update_linear_scaling_label)
+        self.linear_scaling_slider.valueChanged.connect(self.image_canvas.handle_lin_scaling_updated)
+        extra_tools.addWidget(self.linear_scaling_slider)
+
+        v.addLayout(extra_tools)
         v.addWidget(self.image_canvas)
 
     def set_tool(self, tool):
@@ -190,6 +209,10 @@ class MainWindow(QMainWindow):
             if path.lower().endswith((".jpg", ".jpeg", "ppm")):
                 try:
                     self.image_canvas.load_from_file(path)
+                    self.linear_scaling_slider.blockSignals(True)
+                    self.linear_scaling_slider.setValue(10)
+                    self.linear_scaling_slider.blockSignals(False)
+                    self.linear_scaling_label.setText("1.0")
                 except Exception as e:
                     QMessageBox.warning(self, "File error", f"Incorrect content of the file!")
             else:
@@ -220,6 +243,9 @@ class MainWindow(QMainWindow):
 
     def update_text_compression_level(self, new_value):
         self.text_compression_level.setText(str(new_value))
+
+    def update_linear_scaling_label(self, new_value):
+        self.linear_scaling_label.setText(str(round(new_value / 10, 1)))
     
     def update_button_state(self, tool):
         for b in self.main_options_button_group.buttons():
@@ -232,5 +258,4 @@ if __name__ == '__main__':
     w.show()
     sys.exit(app.exec())
 
-    # Skalowanie liniowe kolorów,
     # Powiększanie obrazu i przy dużym powiększeniu możliwość przesuwania oraz wyświetlanie wartości pikseli R,G,B na każdym widocznym pikselu,
