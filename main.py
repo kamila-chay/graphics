@@ -2,7 +2,7 @@ import sys
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLineEdit, QComboBox, QFileDialog, QButtonGroup, QTabWidget, QSlider, QLabel
+    QLineEdit, QComboBox, QFileDialog, QButtonGroup, QTabWidget, QSlider, QLabel, QMessageBox
 )
 
 from PySide6.QtCore import Qt
@@ -10,12 +10,14 @@ from PySide6.QtCore import Qt
 from color_picker import ColorPicker
 from canvas import Canvas
 from constants import slider_style_sheet
+from image_canvas import ImageCanvas
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('Editor')
         self.drawing_canvas = Canvas()
+        self.image_canvas = ImageCanvas()
         self.main_options_button_group = QButtonGroup(self)
         self.main_options_button_group.setExclusive(True)
         self.drawing_canvas.tool_changed.connect(self.update_button_state)
@@ -151,6 +153,8 @@ class MainWindow(QMainWindow):
         
         v.addLayout(toolbar)
 
+        v.addWidget(self.image_canvas)
+
     def set_tool(self, tool):
         self.drawing_canvas.current_tool = tool
 
@@ -181,10 +185,28 @@ class MainWindow(QMainWindow):
             self.drawing_canvas.load_from_file(path)
 
     def load_image_file(self):
-        pass
+        path, _ = QFileDialog.getOpenFileName(self, 'Open image')
+        if path:
+            if path.lower().endswith((".jpg", ".jpeg", "ppm")):
+                try:
+                    self.image_canvas.load_from_file(path)
+                except Exception as e:
+                    QMessageBox.warning(self, "File error", f"Incorrect content of the file!")
+            else:
+                QMessageBox.warning(self, "File error", "Unsupported extension")
 
     def save_image_file(self):
-        pass
+        if not self.image_canvas.image:
+            QMessageBox.warning(self, "Error", "Load a file first")
+        else:
+            file_path, _ = QFileDialog.getSaveFileName(
+                None,
+                "Save Image As",
+                "",
+                "JPEG Files (*.jpg)"
+            )
+            if file_path:
+                self.image_canvas.image.save(file_path, quality=self.jpeg_quality_slider.value())
 
     def handle_format_changes(self, curr_new_text):
         if curr_new_text in {"PPM3", "PPM6"}:
@@ -209,3 +231,6 @@ if __name__ == '__main__':
     w = MainWindow()
     w.show()
     sys.exit(app.exec())
+
+    # Skalowanie liniowe kolorów,
+    # Powiększanie obrazu i przy dużym powiększeniu możliwość przesuwania oraz wyświetlanie wartości pikseli R,G,B na każdym widocznym pikselu,
