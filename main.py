@@ -2,7 +2,7 @@ import sys
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLineEdit, QComboBox, QFileDialog, QButtonGroup, QTabWidget, QSlider, QLabel, QMessageBox
+    QLineEdit, QComboBox, QFileDialog, QButtonGroup, QTabWidget, QSlider, QLabel, QMessageBox, QTextEdit
 )
 
 from PySide6.QtCore import Qt
@@ -10,6 +10,7 @@ from PySide6.QtCore import Qt
 from color_picker import ColorPicker
 from canvas import Canvas
 from constants import slider_style_sheet
+from utils import transform_kernel_to_np
 from image_canvas import ImageCanvas
 
 class MainWindow(QMainWindow):
@@ -176,6 +177,25 @@ class MainWindow(QMainWindow):
 
         v.addLayout(extra_tools)
 
+        filters_toolbar = QHBoxLayout()
+        filters_toolbar.setSpacing(10)
+
+        self.filters_button_group = QButtonGroup(self)
+        self.filters_button_group.setExclusive(True)
+
+        for button_name in ["mean", "median", "sobel", "sharpening", "gaussian", "conv", "dilation", "erosion", "open", "close", "HoM"]:
+            button = QPushButton(button_name)
+            button.setCheckable(True)
+            button.clicked.connect(lambda checked, filter=button_name : self.filter(filter_type=filter))
+            self.filters_button_group.addButton(button)
+            filters_toolbar.addWidget(button)
+
+        v.addLayout(filters_toolbar)
+
+        self.kernel_editor = QTextEdit("")
+        self.kernel_editor.setPlaceholderText("Edit kernel where applicable...")
+        v.addWidget(self.kernel_editor)
+
         self.image_canvas.hover_over_color.connect(self.display_hover_over_color)
         v.addWidget(self.image_canvas, stretch=1)
 
@@ -259,10 +279,19 @@ class MainWindow(QMainWindow):
     def display_hover_over_color(self, r, g, b):
         self.hover_over_color_vals.setText(f"{r}, {g}, {b}")
 
+    def filter(self, filter_type):
+        if filter_type in {"HoM", "conv"}:
+            if kernel := transform_kernel_to_np(self.kernel_editor.toPlainText()):
+                self.image_canvas.filter(filter_type=filter_type, kernel=kernel)
+            else:
+                QMessageBox.warning(self, "Error", "Invalid kernel input. Double check the value")
+        else:
+            self.image_canvas.filter(filter_type=filter_type)
+        # maybe also make sure the user selects a binarization level for morphological filters
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     w = MainWindow()
     w.show()
     sys.exit(app.exec())
-    

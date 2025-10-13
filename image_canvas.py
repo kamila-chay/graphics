@@ -85,3 +85,17 @@ class ImageCanvas(QWidget):
         factor = 1 + delta * 0.1
         self.scale *= factor
         self.update()
+
+    def filter(self, filter_type, kernel=None):
+        if self.image: # we will modify modified_image
+            self.modified_image = QImage(self.image.width(), self.image.height(), QImage.Format_RGB888)
+            for y in range(self.image.height()):  # or also we could read the whole image as numpy, then add extra edges, then slide over...
+                for x in range(self.image.width()):
+                    source = get_np_array_with_padding(self.image, x, y)
+                    # multiplication
+                    # nx = min(max(x + dx, 0), width - 1)
+# ny = min(max(y + dy, 0), height - 1)
+
+# That’s equivalent to replicating edges. - so just do this!!!
+                    self.image.pixelColor(x, y)
+            self.update()
