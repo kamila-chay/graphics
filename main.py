@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt
 from color_picker import ColorPicker
 from canvas import Canvas
 from constants import slider_style_sheet
-from utils import transform_kernel_to_np
+from utils import transform_text_to_kernel
 from image_canvas import ImageCanvas
 
 class MainWindow(QMainWindow):
@@ -280,8 +280,8 @@ class MainWindow(QMainWindow):
         self.hover_over_color_vals.setText(f"{r}, {g}, {b}")
 
     def filter(self, filter_type):
-        if filter_type in {"HoM-thin", "HoM-thicken" "conv"}:
-            if kernel := transform_kernel_to_np(self.kernel_editor.toPlainText()):
+        if filter_type in {"HoM-thin", "HoM-thicken", "conv"}:
+            if kernel := transform_text_to_kernel(self.kernel_editor.toPlainText()):
                 self.image_canvas.filter(filter_type=filter_type, kernel=kernel)
             else:
                 QMessageBox.warning(self, "Error", "Invalid kernel input. Double check the value")

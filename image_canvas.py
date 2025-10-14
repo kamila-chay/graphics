@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt, QPoint, QEvent, Signal
 
 from load_ppm_jpg import load_ppm
 import numpy as np
+from utils import create_ds_kernel
 
 class ImageCanvas(QWidget):
     hover_over_color = Signal(int, int, int)
@@ -107,16 +108,43 @@ class ImageCanvas(QWidget):
             if needs_swap:
                 arr = arr[:, :, ::-1]
             out = np.zeros_like(arr, dtype=np.uint8)
-            ds = [(-1,-1),(0,-1),(1,-1),(-1,0),(0,0),(1,0),(-1,1),(0,1),(1,1)]
+            # handle morphological beforehand (maybe together with sobel) - note that here its *binary* not *grayscale*
+            if filter_type == "median":
+                ds = [(-1,-1),(0,-1),(1,-1),(-1,0),(0,0),(1,0),(-1,1),(0,1),(1,1)]
+                for y in range(arr.shape[0]):
+                    for x in range(arr.shape[1]):
+                        all_neighbors = [[] for _ in range(real_bytes_per_pixel)]
+                        for dx, dy in ds:
+                            nx = min(max(x+dx,0), arr.shape[1]-1)
+                            ny = min(max(y+dy,0), arr.shape[0]-1)
+                            for i in range(real_bytes_per_pixel):
+                                all_neighbors[i].append(arr[ny, nx, i])
+                        for i in range(real_bytes_per_pixel):
+                            all_neighbors[i] = sorted(all_neighbors[i])
+                            out[y, x, i] = all_neighbors[i][4]
+                self.modified_image = QImage(out.data, out.shape[1], out.shape[0], out.shape[1] * real_bytes_per_pixel, QImage.Format_RGB888).copy()
+                self.update()
+                return
+            elif filter_type == "sobel":
+                pass # also needed to convert to grayscale
+            elif filter_type == "mean":
+                kernel = [[1/9] * 3 for _ in range(3)]
+            elif filter_type ==  "sharpening":
+                kernel = [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]
+            elif filter_type == "gaussian":
+                kernel = [[1, 4, 7, 4, 1], [4, 16, 26, 16, 4], [7, 26, 41, 26, 7], [4, 16, 26, 16, 4], [1, 4, 7, 4, 1]]
+                kernel = [[el/273 for el in row] for row in kernel]
+            
+            ds_kernel = create_ds_kernel(kernel)
 
             for y in range(arr.shape[0]):
                 for x in range(arr.shape[1]):
                     acc = np.zeros(real_bytes_per_pixel)
-                    for dx, dy in ds:
+                    for mult, dx, dy in ds_kernel:
                         nx = min(max(x+dx,0), arr.shape[1]-1)
                         ny = min(max(y+dy,0), arr.shape[0]-1)
-                        acc += arr[ny, nx]
-                    out[y, x] = acc / 9
+                        acc += mult * arr[ny, nx].astype(np.float64)
+                    out[y, x] = np.clip(acc, 0, 255)
 
             self.modified_image = QImage(out.data, out.shape[1], out.shape[0], out.shape[1] * real_bytes_per_pixel, QImage.Format_RGB888).copy()
             self.update()
