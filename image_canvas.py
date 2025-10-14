@@ -87,15 +87,36 @@ class ImageCanvas(QWidget):
         self.update()
 
     def filter(self, filter_type, kernel=None):
-        if self.image: # we will modify modified_image
-            self.modified_image = QImage(self.image.width(), self.image.height(), QImage.Format_RGB888)
-            for y in range(self.image.height()):  # or also we could read the whole image as numpy, then add extra edges, then slide over...
-                for x in range(self.image.width()):
-                    source = get_np_array_with_padding(self.image, x, y)
-                    # multiplication
-                    # nx = min(max(x + dx, 0), width - 1)
-# ny = min(max(y + dy, 0), height - 1)
+        if self.image:
+            ptr = self.image.constBits()
+            needs_swap = False
+            bytes_per_pixel = 3
+            real_bytes_per_pixel = 3
 
-# That’s equivalent to replicating edges. - so just do this!!!
-                    self.image.pixelColor(x, y)
+            if self.image.format() == QImage.Format_Grayscale8:
+                bytes_per_pixel = 1
+                real_bytes_per_pixel = 1
+            elif self.image.format() != QImage.Format_RGB888:
+                needs_swap = True
+                bytes_per_pixel = 4
+            
+            arr = np.array(ptr, dtype=np.uint8).reshape(self.image.height(), self.image.bytesPerLine())
+
+            arr = arr[:, :self.image.width() * bytes_per_pixel]
+            arr = arr.reshape(self.image.height(), self.image.width(), bytes_per_pixel)[:, :, :real_bytes_per_pixel]
+            if needs_swap:
+                arr = arr[:, :, ::-1]
+            out = np.zeros_like(arr, dtype=np.uint8)
+            ds = [(-1,-1),(0,-1),(1,-1),(-1,0),(0,0),(1,0),(-1,1),(0,1),(1,1)]
+
+            for y in range(arr.shape[0]):
+                for x in range(arr.shape[1]):
+                    acc = np.zeros(real_bytes_per_pixel)
+                    for dx, dy in ds:
+                        nx = min(max(x+dx,0), arr.shape[1]-1)
+                        ny = min(max(y+dy,0), arr.shape[0]-1)
+                        acc += arr[ny, nx]
+                    out[y, x] = acc / 9
+
+            self.modified_image = QImage(out.data, out.shape[1], out.shape[0], out.shape[1] * real_bytes_per_pixel, QImage.Format_RGB888).copy()
             self.update()

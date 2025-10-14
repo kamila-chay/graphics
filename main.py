@@ -183,7 +183,7 @@ class MainWindow(QMainWindow):
         self.filters_button_group = QButtonGroup(self)
         self.filters_button_group.setExclusive(True)
 
-        for button_name in ["mean", "median", "sobel", "sharpening", "gaussian", "conv", "dilation", "erosion", "open", "close", "HoM"]:
+        for button_name in ["mean", "median", "sobel", "sharpening", "gaussian", "conv", "dilation", "erosion", "open", "close", "HoM-thin", "HoM-thicken"]:
             button = QPushButton(button_name)
             button.setCheckable(True)
             button.clicked.connect(lambda checked, filter=button_name : self.filter(filter_type=filter))
@@ -280,7 +280,7 @@ class MainWindow(QMainWindow):
         self.hover_over_color_vals.setText(f"{r}, {g}, {b}")
 
     def filter(self, filter_type):
-        if filter_type in {"HoM", "conv"}:
+        if filter_type in {"HoM-thin", "HoM-thicken" "conv"}:
             if kernel := transform_kernel_to_np(self.kernel_editor.toPlainText()):
                 self.image_canvas.filter(filter_type=filter_type, kernel=kernel)
             else:
