@@ -145,7 +145,7 @@ class MainWindow(QMainWindow):
         self.jpeg_quality_slider = QSlider(Qt.Horizontal)
         self.jpeg_quality_slider.setRange(0, 100)
         self.jpeg_quality_slider.setStyleSheet(slider_style_sheet)
-        self.jpeg_quality_slider.setValue(80)
+        self.jpeg_qualoutity_slider.setValue(80)
         self.jpeg_quality_slider.setTickPosition(QSlider.TicksBelow)
         self.jpeg_quality_slider.setTickInterval(10)
         self.jpeg_quality_slider.valueChanged.connect(self.update_text_compression_level)
@@ -192,9 +192,18 @@ class MainWindow(QMainWindow):
 
         v.addLayout(filters_toolbar)
 
+        filter_params_layout = QHBoxLayout()
         self.kernel_editor = QTextEdit("")
         self.kernel_editor.setPlaceholderText("Edit kernel where applicable...")
-        v.addWidget(self.kernel_editor)
+        self.binary_threshold = QSlider(Qt.Vertical)
+        self.binary_threshold.setRange(0, 255)
+        self.binary_threshold.setStyleSheet(slider_style_sheet)
+        self.binary_threshold.setValue(127)
+        self.binary_threshold.setTickInterval(5)
+        filter_params_layout.addWidget(self.kernel_editor)
+        filter_params_layout.addWidget(self.binary_threshold)
+
+        v.addLayout(filter_params_layout)
 
         self.image_canvas.hover_over_color.connect(self.display_hover_over_color)
         v.addWidget(self.image_canvas, stretch=1)
@@ -280,13 +289,14 @@ class MainWindow(QMainWindow):
         self.hover_over_color_vals.setText(f"{r}, {g}, {b}")
 
     def filter(self, filter_type):
+        binary_threshold_for_morphological = self.binary_threshold.value()
         if filter_type in {"HoM-thin", "HoM-thicken", "conv"}:
             if kernel := transform_text_to_kernel(self.kernel_editor.toPlainText()):
-                self.image_canvas.filter(filter_type=filter_type, kernel=kernel)
+                self.image_canvas.filter(filter_type=filter_type, kernel=kernel, bin_threshold=binary_threshold_for_morphological)
             else:
                 QMessageBox.warning(self, "Error", "Invalid kernel input. Double check the value")
         else:
-            self.image_canvas.filter(filter_type=filter_type)
+            self.image_canvas.filter(filter_type=filter_type, bin_threshold=binary_threshold_for_morphological)
         # maybe also make sure the user selects a binarization level for morphological filters
 
 

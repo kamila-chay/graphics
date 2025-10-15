@@ -6,6 +6,8 @@ from load_ppm_jpg import load_ppm
 import numpy as np
 from utils import create_ds_kernel
 
+ds = [(-1,-1),(0,-1),(1,-1),(-1,0),(0,0),(1,0),(-1,1),(0,1),(1,1)]
+
 class ImageCanvas(QWidget):
     hover_over_color = Signal(int, int, int)
     def __init__(self, parent=None):
@@ -87,7 +89,65 @@ class ImageCanvas(QWidget):
         self.scale *= factor
         self.update()
 
-    def filter(self, filter_type, kernel=None):
+    def perform_dilation(self, arr):
+        out = np.zeros_like(arr, dtype=np.uint8)
+        for y in range(arr.shape[0]):
+            for x in range(arr.shape[1]):
+                for dx, dy in ds:
+                    nx = min(max(x+dx,0), arr.shape[1]-1)
+                    ny = min(max(y+dy,0), arr.shape[0]-1)
+                    if arr[ny, nx] == 255:
+                        out[y, x] = 255
+        return out
+    
+    def perform_erosion(self, arr):
+        out = np.ones_like(arr, dtype=np.uint8) * 255
+        for y in range(arr.shape[0]):
+            for x in range(arr.shape[1]):
+                for dx, dy in ds:
+                    nx = min(max(x+dx,0), arr.shape[1]-1)
+                    ny = min(max(y+dy,0), arr.shape[0]-1)
+                    if arr[ny, nx] == 0:
+                        out[y, x] = 0
+        return out
+
+    def perform_median_filter(self, arr):
+        out = np.zeros_like(arr, dtype=np.uint8)
+        
+        for y in range(arr.shape[0]):
+            for x in range(arr.shape[1]):
+                all_neighbors = [[] for _ in range(arr.shape[2])]
+                for dx, dy in ds:
+                    nx = min(max(x+dx,0), arr.shape[1]-1)
+                    ny = min(max(y+dy,0), arr.shape[0]-1)
+                    for i in range(arr.shape[2]):
+                        all_neighbors[i].append(arr[ny, nx, i])
+                for i in range(arr.shape[2]):
+                    all_neighbors[i] = sorted(all_neighbors[i])
+                    out[y, x, i] = all_neighbors[i][4]
+
+        return arr
+
+    def perform_sobel(self, arr):
+        out = np.zeros_like(arr, dtype=np.uint8)
+        kernel_gx = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]
+        kernel_gy = [[-1, -2, -1], [0, 0, 0], [1, 2, 1]]
+        ds_kernel_gx = create_ds_kernel(kernel_gx)
+        ds_kernel_gy = create_ds_kernel(kernel_gy)
+        for y in range(arr.shape[0]):
+            for x in range(arr.shape[1]):
+                acc_x = 0.0
+                acc_y = 0.0
+                for (mult_gx, dx, dy), (mult_gy, _, _) in zip(ds_kernel_gx, ds_kernel_gy):
+                    nx = min(max(x+dx,0), arr.shape[1]-1)
+                    ny = min(max(y+dy,0), arr.shape[0]-1)
+                    acc_x += mult_gx * arr[ny, nx].astype(np.float64)
+                    acc_y += mult_gy * arr[ny, nx].astype(np.float64)
+                out[y, x] = np.clip(np.abs(acc_x) + np.abs(acc_y), 0, 255)
+
+        return out
+
+    def filter(self, filter_type, kernel=None, bin_threshold=None):
         if self.image:
             ptr = self.image.constBits()
             needs_swap = False
@@ -97,9 +157,11 @@ class ImageCanvas(QWidget):
             if self.image.format() == QImage.Format_Grayscale8:
                 bytes_per_pixel = 1
                 real_bytes_per_pixel = 1
+                end_format = QImage.Format_Grayscale8
             elif self.image.format() != QImage.Format_RGB888:
                 needs_swap = True
                 bytes_per_pixel = 4
+                end_format = QImage.Format_RGB888
             
             arr = np.array(ptr, dtype=np.uint8).reshape(self.image.height(), self.image.bytesPerLine())
 
@@ -107,44 +169,49 @@ class ImageCanvas(QWidget):
             arr = arr.reshape(self.image.height(), self.image.width(), bytes_per_pixel)[:, :, :real_bytes_per_pixel]
             if needs_swap:
                 arr = arr[:, :, ::-1]
-            out = np.zeros_like(arr, dtype=np.uint8)
-            # handle morphological beforehand (maybe together with sobel) - note that here its *binary* not *grayscale*
-            if filter_type == "median":
-                ds = [(-1,-1),(0,-1),(1,-1),(-1,0),(0,0),(1,0),(-1,1),(0,1),(1,1)]
+
+            if filter_type in {"dilation", "erosion", "close", "open", "HoM-thin", "HoM-thicken", "sobel"}:
+                if arr.ndim == 2 and arr.shape[2] == 3: 
+                    arr = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
+                end_format = QImage.Format_Grayscale8
+
+            if filter_type in {"dilation", "erosion", "close", "open", "HoM-thin", "HoM-thicken"}:
+                arr = (arr > bin_threshold).astype(np.uint8) * 255
+            
+            if filter_type == "dilation":
+                out = self.perform_dilation(arr)
+            elif filter_type == "erosion":
+                out = self.perform_erosion(arr)
+            elif filter_type == "close":
+                out = self.perform_dilation(arr)
+                out = self.perform_erosion(out)
+            elif filter_type == "open":
+                out = self.perform_erosion(arr)
+                out = self.perform_dilation(out)
+            elif filter_type == "median":
+                out = self.perform_median_filter(arr)
+            elif filter_type == "sobel":
+                out = self.perform_sobel(arr)
+            else:       
+                if filter_type == "mean":
+                    kernel = [[1/9] * 3 for _ in range(3)]
+                elif filter_type ==  "sharpening":
+                    kernel = [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]
+                elif filter_type == "gaussian":
+                    kernel = [[1, 4, 7, 4, 1], [4, 16, 26, 16, 4], [7, 26, 41, 26, 7], [4, 16, 26, 16, 4], [1, 4, 7, 4, 1]]
+                    kernel = [[el/273 for el in row] for row in kernel]
+
+                out = np.zeros_like(arr, dtype=np.uint8)
+                ds_kernel = create_ds_kernel(kernel)
+
                 for y in range(arr.shape[0]):
                     for x in range(arr.shape[1]):
-                        all_neighbors = [[] for _ in range(real_bytes_per_pixel)]
-                        for dx, dy in ds:
+                        acc = np.zeros(real_bytes_per_pixel)
+                        for mult, dx, dy in ds_kernel:
                             nx = min(max(x+dx,0), arr.shape[1]-1)
                             ny = min(max(y+dy,0), arr.shape[0]-1)
-                            for i in range(real_bytes_per_pixel):
-                                all_neighbors[i].append(arr[ny, nx, i])
-                        for i in range(real_bytes_per_pixel):
-                            all_neighbors[i] = sorted(all_neighbors[i])
-                            out[y, x, i] = all_neighbors[i][4]
-                self.modified_image = QImage(out.data, out.shape[1], out.shape[0], out.shape[1] * real_bytes_per_pixel, QImage.Format_RGB888).copy()
-                self.update()
-                return
-            elif filter_type == "sobel":
-                pass # also needed to convert to grayscale
-            elif filter_type == "mean":
-                kernel = [[1/9] * 3 for _ in range(3)]
-            elif filter_type ==  "sharpening":
-                kernel = [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]
-            elif filter_type == "gaussian":
-                kernel = [[1, 4, 7, 4, 1], [4, 16, 26, 16, 4], [7, 26, 41, 26, 7], [4, 16, 26, 16, 4], [1, 4, 7, 4, 1]]
-                kernel = [[el/273 for el in row] for row in kernel]
-            
-            ds_kernel = create_ds_kernel(kernel)
+                            acc += mult * arr[ny, nx].astype(np.float64)
+                        out[y, x] = np.clip(acc, 0, 255)
 
-            for y in range(arr.shape[0]):
-                for x in range(arr.shape[1]):
-                    acc = np.zeros(real_bytes_per_pixel)
-                    for mult, dx, dy in ds_kernel:
-                        nx = min(max(x+dx,0), arr.shape[1]-1)
-                        ny = min(max(y+dy,0), arr.shape[0]-1)
-                        acc += mult * arr[ny, nx].astype(np.float64)
-                    out[y, x] = np.clip(acc, 0, 255)
-
-            self.modified_image = QImage(out.data, out.shape[1], out.shape[0], out.shape[1] * real_bytes_per_pixel, QImage.Format_RGB888).copy()
+            self.modified_image = QImage(out.data, out.shape[1], out.shape[0], out.shape[1] * (out.shape[2] if out.ndim == 3 else 1), end_format).copy()
             self.update()
