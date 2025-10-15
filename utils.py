@@ -2,6 +2,7 @@ import numpy as np
 
 def transform_text_to_kernel(text):
     rows = text.split("\n")
+    rows = [row.strip(",") for row in rows]
     rows = [row.split(",") for row in rows]
     if len(rows) == 0 or len(rows[0]) == 0:
         return None

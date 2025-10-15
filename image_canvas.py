@@ -146,7 +146,28 @@ class ImageCanvas(QWidget):
                 out[y, x] = np.clip(np.abs(acc_x) + np.abs(acc_y), 0, 255)
 
         return out
-
+    
+    def perform_matching(self, arr, kernel):
+        out = np.zeros_like(arr, dtype=np.uint8)
+        ds_kernel = create_ds_kernel(kernel)
+        pad_up = len(kernel) // 2
+        pad_down = pad_up - 1 if len(kernel) % 2 == 0 else pad_up
+        pad_left = len(kernel) // 2
+        pad_right = pad_left - 1 if len(kernel) % 2 == 0 else pad_left
+        for y in range(pad_up, arr.shape[0] - pad_down):
+            for x in range(pad_left, arr.shape[1] - pad_right):
+                all_matches = []
+                for expected_val, dx, dy in ds_kernel:
+                    nx = x+dx
+                    ny = y+dy
+                    if arr[ny, nx] == expected_val * 255 or arr[ny, nx] == expected_val:
+                        all_matches.append(True)
+                    else:
+                        all_matches.append(False)
+                if all(all_matches):
+                    out[y, x] = 255
+        return out
+        
     def filter(self, filter_type, kernel=None, bin_threshold=None):
         if self.image:
             ptr = self.image.constBits()
@@ -189,6 +210,12 @@ class ImageCanvas(QWidget):
             elif filter_type == "open":
                 out = self.perform_erosion(arr)
                 out = self.perform_dilation(out)
+            elif filter_type == "HoM-thin":
+                out = self.perform_matching(arr, kernel)
+                out = arr - out
+            elif filter_type == "HoM-thicken":
+                out = self.perform_matching(arr, kernel)
+                out = arr - out
             elif filter_type == "median":
                 out = self.perform_median_filter(arr)
             elif filter_type == "sobel":
@@ -216,3 +243,4 @@ class ImageCanvas(QWidget):
 
             self.modified_image = QImage(out.data, out.shape[1], out.shape[0], out.shape[1] * (out.shape[2] if out.ndim == 3 else 1), end_format).copy()
             self.update()
+            print("Done")
