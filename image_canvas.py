@@ -126,7 +126,7 @@ class ImageCanvas(QWidget):
                     all_neighbors[i] = sorted(all_neighbors[i])
                     out[y, x, i] = all_neighbors[i][4]
 
-        return arr
+        return out
 
     def perform_sobel(self, arr):
         out = np.zeros_like(arr, dtype=np.uint8)
@@ -171,7 +171,7 @@ class ImageCanvas(QWidget):
                 arr = arr[:, :, ::-1]
 
             if filter_type in {"dilation", "erosion", "close", "open", "HoM-thin", "HoM-thicken", "sobel"}:
-                if arr.ndim == 2 and arr.shape[2] == 3: 
+                if arr.ndim == 3 and arr.shape[2] == 3: 
                     arr = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
                 end_format = QImage.Format_Grayscale8
 

@@ -145,7 +145,7 @@ class MainWindow(QMainWindow):
         self.jpeg_quality_slider = QSlider(Qt.Horizontal)
         self.jpeg_quality_slider.setRange(0, 100)
         self.jpeg_quality_slider.setStyleSheet(slider_style_sheet)
-        self.jpeg_qualoutity_slider.setValue(80)
+        self.jpeg_quality_slider.setValue(80)
         self.jpeg_quality_slider.setTickPosition(QSlider.TicksBelow)
         self.jpeg_quality_slider.setTickInterval(10)
         self.jpeg_quality_slider.valueChanged.connect(self.update_text_compression_level)
