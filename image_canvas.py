@@ -212,10 +212,10 @@ class ImageCanvas(QWidget):
                 out = self.perform_dilation(out)
             elif filter_type == "HoM-thin":
                 out = self.perform_matching(arr, kernel)
-                out = arr - out
+                out = np.clip(arr - out, 0, 255)
             elif filter_type == "HoM-thicken":
                 out = self.perform_matching(arr, kernel)
-                out = arr - out
+                out = np.clip(arr + out, 0, 255)
             elif filter_type == "median":
                 out = self.perform_median_filter(arr)
             elif filter_type == "sobel":
