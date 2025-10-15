@@ -154,6 +154,8 @@ class ImageCanvas(QWidget):
             bytes_per_pixel = 3
             real_bytes_per_pixel = 3
 
+            end_format = QImage.Format_RGB888
+
             if self.image.format() == QImage.Format_Grayscale8:
                 bytes_per_pixel = 1
                 real_bytes_per_pixel = 1
@@ -161,7 +163,6 @@ class ImageCanvas(QWidget):
             elif self.image.format() != QImage.Format_RGB888:
                 needs_swap = True
                 bytes_per_pixel = 4
-                end_format = QImage.Format_RGB888
             
             arr = np.array(ptr, dtype=np.uint8).reshape(self.image.height(), self.image.bytesPerLine())
 
