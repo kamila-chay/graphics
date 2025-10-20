@@ -89,6 +89,22 @@ class ImageCanvas(QWidget):
         self.scale *= factor
         self.update()
 
+    def histogram_filter(self, name):
+        if self.image:
+            if "stretch" in name:
+                pass
+            else:
+                pass
+
+    def binarize(self, name, bin_threshold, black_percent):
+        if self.image:
+            if "percent black" in name:
+                pass
+            elif "mean iterative" in name:
+                pass
+            else:
+                pass
+
     def perform_dilation(self, arr):
         out = np.zeros_like(arr, dtype=np.uint8)
         for y in range(arr.shape[0]):

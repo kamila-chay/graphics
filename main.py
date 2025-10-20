@@ -2,7 +2,7 @@ import sys
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLineEdit, QComboBox, QFileDialog, QButtonGroup, QTabWidget, QSlider, QLabel, QMessageBox, QTextEdit
+    QLineEdit, QComboBox, QFileDialog, QButtonGroup, QTabWidget, QSlider, QLabel, QMessageBox, QTextEdit, QSizePolicy
 )
 
 from PySide6.QtCore import Qt
@@ -183,7 +183,8 @@ class MainWindow(QMainWindow):
         self.filters_button_group = QButtonGroup(self)
         self.filters_button_group.setExclusive(True)
 
-        for button_name in ["mean", "median", "sobel", "sharpening", "gaussian", "conv", "dilation", "erosion", "open", "close", "HoM-thin", "HoM-thicken"]:
+        for button_name in ["mean", "median", "sobel", "sharpening", "gaussian", "conv", "dilation", "erosion", "open", "close", "HoM-thin", "HoM-thicken",
+                            "histo stretch", "histo equalize"]:
             button = QPushButton(button_name)
             button.setCheckable(True)
             button.clicked.connect(lambda checked, filter=button_name : self.filter(filter_type=filter))
@@ -195,13 +196,62 @@ class MainWindow(QMainWindow):
         filter_params_layout = QHBoxLayout()
         self.kernel_editor = QTextEdit("")
         self.kernel_editor.setPlaceholderText("Edit kernel where applicable...")
-        self.binary_threshold = QSlider(Qt.Vertical)
+        filter_params_layout.addWidget(self.kernel_editor)
+
+        binarization_section = QVBoxLayout()
+
+        label = QLabel("Binarization settings")
+        label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        binarization_section.addWidget(label, stretch=1)
+
+        binary_threshold_slider_layout = QHBoxLayout()
+
+        binary_threshold_slider_label = QLabel("Value threshold: ")
+        binary_threshold_slider_layout.addWidget(binary_threshold_slider_label)
+
+        self.binary_threshold = QSlider(Qt.Horizontal)
         self.binary_threshold.setRange(0, 255)
         self.binary_threshold.setStyleSheet(slider_style_sheet)
         self.binary_threshold.setValue(127)
         self.binary_threshold.setTickInterval(5)
-        filter_params_layout.addWidget(self.kernel_editor)
-        filter_params_layout.addWidget(self.binary_threshold)
+        self.binary_threshold.valueChanged.connect(self.update_binary_threshold_value_peek)
+        binary_threshold_slider_layout.addWidget(self.binary_threshold)
+
+        self.binary_threshold_value_peek = QLineEdit("127")
+        self.binary_threshold_value_peek.setReadOnly(True)
+        self.binary_threshold_value_peek.setFixedWidth(45)
+        binary_threshold_slider_layout.addWidget(self.binary_threshold_value_peek)
+
+        binarization_section.addLayout(binary_threshold_slider_layout)
+
+        black_percent_slider_layout = QHBoxLayout()
+
+        black_percent_slider_label = QLabel("Percent of black: ")
+        black_percent_slider_layout.addWidget(black_percent_slider_label)
+
+        self.black_percent = QSlider(Qt.Horizontal)
+        self.black_percent.setRange(0, 100)
+        self.black_percent.setStyleSheet(slider_style_sheet)
+        self.black_percent.setValue(50)
+        self.black_percent.setTickInterval(5)
+        self.black_percent.valueChanged.connect(self.update_black_percent_value_peek)
+        black_percent_slider_layout.addWidget(self.black_percent)
+
+        self.black_percent_value_peek = QLineEdit("50%")
+        self.black_percent_value_peek.setReadOnly(True)
+        self.black_percent_value_peek.setFixedWidth(45)
+        black_percent_slider_layout.addWidget(self.black_percent_value_peek)
+
+        binarization_section.addLayout(black_percent_slider_layout)
+
+        for button_name in ["binarize - selected value threshold", "binarize - percent black selection", "binarize - mean iterative selection"]:
+            button = QPushButton(button_name)
+            button.setCheckable(True)
+            button.clicked.connect(lambda checked, filter=button_name : self.filter(filter_type=filter))
+            self.filters_button_group.addButton(button)
+            binarization_section.addWidget(button, stretch=1)
+        
+        filter_params_layout.addLayout(binarization_section)
 
         v.addLayout(filter_params_layout)
 
@@ -288,16 +338,27 @@ class MainWindow(QMainWindow):
     def display_hover_over_color(self, r, g, b):
         self.hover_over_color_vals.setText(f"{r}, {g}, {b}")
 
+    def update_binary_threshold_value_peek(self, new_value):
+        self.binary_threshold_value_peek.setText(f"{new_value}")
+
+    def update_black_percent_value_peek(self, new_value):
+        self.black_percent_value_peek.setText(f"{new_value}%")
+
     def filter(self, filter_type):
-        binary_threshold_for_morphological = self.binary_threshold.value()
+        selected_bin_threshold = self.binary_threshold.value()
+        black_percent = self.black_percent.value()
+        if filter_type.startswith("binarize"):
+            self.image_canvas.binarize(filter_type, selected_bin_threshold, black_percent)
+        if filter_type.startswith("histo"):
+            self.image_canvas.histogram_filter(filter_type)
+            return
         if filter_type in {"HoM-thin", "HoM-thicken", "conv"}:
             if kernel := transform_text_to_kernel(self.kernel_editor.toPlainText()):
-                self.image_canvas.filter(filter_type=filter_type, kernel=kernel, bin_threshold=binary_threshold_for_morphological)
+                self.image_canvas.filter(filter_type=filter_type, kernel=kernel, bin_threshold=selected_bin_threshold)
             else:
                 QMessageBox.warning(self, "Error", "Invalid kernel input. Double check the value")
         else:
-            self.image_canvas.filter(filter_type=filter_type, bin_threshold=binary_threshold_for_morphological)
-        # maybe also make sure the user selects a binarization level for morphological filters
+            self.image_canvas.filter(filter_type=filter_type, bin_threshold=selected_bin_threshold)
 
 
 if __name__ == '__main__':
