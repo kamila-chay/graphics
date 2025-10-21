@@ -91,12 +91,42 @@ class ImageCanvas(QWidget):
 
     def binarize(self, name, bin_threshold, black_percent):
         if self.image:
+            arr = self.read_image_bits()
+            if arr.ndim == 3 and arr.shape[2] == 3: 
+                arr = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
+            if arr.ndim == 3:
+                arr = arr[:, : 0]
+            arr = arr.astype(np.uint8)
+            arr_flat = arr.flatten()
+
             if "percent black" in name:
-                pass
+                num_pixels = arr_flat.shape[0]
+                num_black_pixels = int(num_pixels * black_percent / 100)
+                cdf = np.zeros(257, dtype=np.uint32)
+                cdf[0] = 0
+                for i in range(1, 257):
+                    cdf[i] = cdf[i - 1] + np.sum(arr_flat == (i - 1))
+                    if cdf[i] >= num_black_pixels:
+                        break
+                arr_flat[arr_flat < i] = 0
+                arr_flat[arr_flat >= i] = 255
+                out = arr_flat.reshape(arr.shape[0], arr.shape[1])              
+                
             elif "mean iterative" in name:
-                pass
-            else:
-                pass
+                old_mean = 768
+                new_mean = arr_flat.mean()
+                while np.abs(new_mean - old_mean) > 2:
+                    old_mean = new_mean
+                    darker = arr_flat[arr_flat < old_mean]
+                    brighter = arr_flat[arr_flat >= old_mean]
+                    mean_darker = darker.mean()
+                    mean_brighter = brighter.mean()
+                    new_mean = (mean_darker + mean_brighter) / 2
+                out = (arr >= new_mean).astype(np.uint8) * 255
+            else: # threshold
+                out = (arr >= bin_threshold).astype(np.uint8) * 255
+
+            self.modified_image = QImage(out, out.shape[1], out.shape[0], out.shape[1], QImage.Format_Grayscale8).copy()
             self.update()
 
     def perform_dilation(self, arr):

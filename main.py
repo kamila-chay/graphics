@@ -349,6 +349,7 @@ class MainWindow(QMainWindow):
         black_percent = self.black_percent.value()
         if filter_type.startswith("binarize"):
             self.image_canvas.binarize(filter_type, selected_bin_threshold, black_percent)
+            return
         if filter_type.startswith("histo"):
             self.image_canvas.histogram_filter(filter_type)
             return
