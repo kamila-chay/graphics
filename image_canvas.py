@@ -205,7 +205,6 @@ class ImageCanvas(QWidget):
             arr = self.read_image_bits()
             arr = arr.astype(np.float32)
             if arr.shape[2] == 3:  # colorful
-            # RGB to YCbCr
                 y_channel = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
                 cb_channel = -0.168736 * arr[:, :, 0] - 0.331264 * arr[:, :, 1] + 0.5 * arr[:, :, 2] + 128
                 cr_channel = 0.5 * arr[:, :, 0] - 0.418688 * arr[:, :, 1] - 0.081312 * arr[:, :, 2] + 128
@@ -215,17 +214,32 @@ class ImageCanvas(QWidget):
             if "stretch" in name:
                 y_min, y_max = y_channel.min(), y_channel.max()
                 y_channel = (y_channel - y_min) / (y_max - y_min) * 255
+            else: # equalization
+                y_channel = y_channel.clip(0, 255).astype(np.uint8)
+                flat = y_channel.flatten()
+                hist = np.zeros(256, dtype=int)
+                for pixel in flat:
+                    hist[pixel] += 1
+                
+                cdf = np.zeros(256, dtype=int)
+                cdf[0] = hist[0]
+                for i in range(1, 256):
+                    cdf[i] = cdf[i-1] + hist[i]
+                
+                total_pixels = flat.shape[0]
+                
+                lookup_table = np.zeros(256, dtype=np.uint8)
+                for i in range(256):
+                    lookup_table[i] = ((cdf[i]) / (total_pixels)) * 255
+                
+                y_channel = lookup_table[y_channel]
 
             if arr.shape[2] == 3:  # colorful
-                # YCbCr to RGB
                 r_channel = y_channel + 1.402 * (cr_channel - 128)
                 g_channel = y_channel - 0.344136 * (cb_channel - 128) - 0.714136 * (cr_channel - 128)
                 b_channel = y_channel + 1.772 * (cb_channel - 128)
                 
                 new_image = np.stack([r_channel, g_channel, b_channel], axis=-1).clip(0, 255).astype(np.uint8)
-                print(np.min(np.mean(new_image, axis=-1)))
-                print(np.max(np.mean(new_image, axis=-1)))
-                print(np.any(np.all(new_image > 252, axis=-1)))
                 self.modified_image = QImage(new_image, new_image.shape[1], new_image.shape[0], new_image.shape[1] * 3, QImage.Format_RGB888).copy()
             else:
                 new_image = y_channel.clip(0, 255).astype(np.uint8)
