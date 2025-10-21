@@ -89,13 +89,6 @@ class ImageCanvas(QWidget):
         self.scale *= factor
         self.update()
 
-    def histogram_filter(self, name):
-        if self.image:
-            if "stretch" in name:
-                pass
-            else:
-                pass
-
     def binarize(self, name, bin_threshold, black_percent):
         if self.image:
             if "percent black" in name:
@@ -104,6 +97,7 @@ class ImageCanvas(QWidget):
                 pass
             else:
                 pass
+            self.update()
 
     def perform_dilation(self, arr):
         out = np.zeros_like(arr, dtype=np.uint8)
@@ -183,31 +177,68 @@ class ImageCanvas(QWidget):
                 if all(all_matches):
                     out[y, x] = 255
         return out
+    
+    def read_image_bits(self):
+        ptr = self.image.constBits()
+        needs_swap = False
+        bytes_per_pixel = 3
+        real_bytes_per_pixel = 3
+
+        if self.image.format() == QImage.Format_Grayscale8:
+            bytes_per_pixel = 1
+            real_bytes_per_pixel = 1
+        elif self.image.format() != QImage.Format_RGB888:
+            needs_swap = True
+            bytes_per_pixel = 4
+        
+        arr = np.array(ptr, dtype=np.uint8).reshape(self.image.height(), self.image.bytesPerLine())
+
+        arr = arr[:, :self.image.width() * bytes_per_pixel]
+        arr = arr.reshape(self.image.height(), self.image.width(), bytes_per_pixel)[:, :, :real_bytes_per_pixel]
+        if needs_swap:
+            arr = arr[:, :, ::-1]
+
+        return arr
+    
+    def histogram_filter(self, name):
+        if self.image:
+            arr = self.read_image_bits()
+            arr = arr.astype(np.float32)
+            if arr.shape[2] == 3:  # colorful
+            # RGB to YCbCr
+                y_channel = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
+                cb_channel = -0.168736 * arr[:, :, 0] - 0.331264 * arr[:, :, 1] + 0.5 * arr[:, :, 2] + 128
+                cr_channel = 0.5 * arr[:, :, 0] - 0.418688 * arr[:, :, 1] - 0.081312 * arr[:, :, 2] + 128
+            else:
+                y_channel = arr
+
+            if "stretch" in name:
+                y_min, y_max = y_channel.min(), y_channel.max()
+                y_channel = (y_channel - y_min) / (y_max - y_min) * 255
+
+            if arr.shape[2] == 3:  # colorful
+                # YCbCr to RGB
+                r_channel = y_channel + 1.402 * (cr_channel - 128)
+                g_channel = y_channel - 0.344136 * (cb_channel - 128) - 0.714136 * (cr_channel - 128)
+                b_channel = y_channel + 1.772 * (cb_channel - 128)
+                
+                new_image = np.stack([r_channel, g_channel, b_channel], axis=-1).clip(0, 255).astype(np.uint8)
+                print(np.min(np.mean(new_image, axis=-1)))
+                print(np.max(np.mean(new_image, axis=-1)))
+                print(np.any(np.all(new_image > 252, axis=-1)))
+                self.modified_image = QImage(new_image, new_image.shape[1], new_image.shape[0], new_image.shape[1] * 3, QImage.Format_RGB888).copy()
+            else:
+                new_image = y_channel.clip(0, 255).astype(np.uint8)
+                self.modified_image = QImage(new_image, new_image.shape[1], new_image.shape[0], new_image.shape[1], QImage.Format_Grayscale8).copy()
+
+            self.update()
         
     def filter(self, filter_type, kernel=None, bin_threshold=None):
         if self.image:
-            ptr = self.image.constBits()
-            needs_swap = False
-            bytes_per_pixel = 3
-            real_bytes_per_pixel = 3
-
-            end_format = QImage.Format_RGB888
-
-            if self.image.format() == QImage.Format_Grayscale8:
-                bytes_per_pixel = 1
-                real_bytes_per_pixel = 1
-                end_format = QImage.Format_Grayscale8
-            elif self.image.format() != QImage.Format_RGB888:
-                needs_swap = True
-                bytes_per_pixel = 4
+            arr = self.read_image_bits()
+            bytes_per_pixel = arr.shape[2]
+            end_format = QImage.Format_Grayscale8 if  bytes_per_pixel == 1 else  QImage.Format_RGB888
             
-            arr = np.array(ptr, dtype=np.uint8).reshape(self.image.height(), self.image.bytesPerLine())
-
-            arr = arr[:, :self.image.width() * bytes_per_pixel]
-            arr = arr.reshape(self.image.height(), self.image.width(), bytes_per_pixel)[:, :, :real_bytes_per_pixel]
-            if needs_swap:
-                arr = arr[:, :, ::-1]
-
             if filter_type in {"dilation", "erosion", "close", "open", "HoM-thin", "HoM-thicken", "sobel"}:
                 if arr.ndim == 3 and arr.shape[2] == 3: 
                     arr = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
@@ -250,7 +281,7 @@ class ImageCanvas(QWidget):
 
                 for y in range(arr.shape[0]):
                     for x in range(arr.shape[1]):
-                        acc = np.zeros(real_bytes_per_pixel)
+                        acc = np.zeros(bytes_per_pixel)
                         for mult, dx, dy in ds_kernel:
                             nx = min(max(x+dx,0), arr.shape[1]-1)
                             ny = min(max(y+dy,0), arr.shape[0]-1)
@@ -259,4 +290,3 @@ class ImageCanvas(QWidget):
 
             self.modified_image = QImage(out.data, out.shape[1], out.shape[0], out.shape[1] * (out.shape[2] if out.ndim == 3 else 1), end_format).copy()
             self.update()
-            print("Done")
