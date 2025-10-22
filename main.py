@@ -12,6 +12,7 @@ from canvas import Canvas
 from constants import slider_style_sheet
 from utils import transform_text_to_kernel
 from image_canvas import ImageCanvas
+from polygons_canvas import PolygonsCanvas
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -28,9 +29,12 @@ class MainWindow(QMainWindow):
         self.init_figures_tab()
         self.images_tab = QWidget()
         self.init_images_tab()
+        self.polygons_tab = QWidget()
+        self.init_polygons_tab()
 
         tabs.addTab(self.figures_tab, "Figures")
         tabs.addTab(self.images_tab, "Images")
+        tabs.addTab(self.polygons_tab, "Polygons")
 
         self.setCentralWidget(tabs)
 
@@ -257,6 +261,35 @@ class MainWindow(QMainWindow):
 
         self.image_canvas.hover_over_color.connect(self.display_hover_over_color)
         v.addWidget(self.image_canvas, stretch=1)
+
+    def init_polygons_tab(self):
+        layout = QVBoxLayout(self.polygons_tab)
+        
+        self.polygons_button_group = QButtonGroup(self)
+        self.polygons_button_group.setExclusive(True)
+
+        main_options = QHBoxLayout()
+        for button_name in ["create", "translate", "rotate", "scale"]:
+            button = QPushButton(button_name)
+            button.setCheckable(True)
+            if button_name == "create":
+                button.setChecked(True)
+            button.clicked.connect(lambda checked, opt=button_name : self.polygon_option(opt=opt))
+            self.polygons_button_group.addButton(button)
+            main_options.addWidget(button)
+
+        layout.addLayout(main_options)
+
+        self.polygons_canvas = PolygonsCanvas()
+        self.polygons_canvas.mode_changed.connect(self.setButtonPolygonMode)
+        layout.addWidget(self.polygons_canvas)
+
+    def polygon_option(self, opt):
+        self.polygons_canvas.setCurrentOption(opt)
+
+    def setButtonPolygonMode(self, new_value):
+        for b in self.polygons_button_group.buttons():
+            b.setChecked(b.text() == new_value)
 
     def set_tool(self, tool):
         self.drawing_canvas.current_tool = tool
