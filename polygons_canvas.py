@@ -174,20 +174,19 @@ class PolygonsCanvas(QWidget):
     def mouseReleaseEvent(self, event):
         if self.current_mode in {"translate", "rotate", "scale"} and self.picked_index is not None:
             self.polygons[self.picked_index] = self.updated
-            self.setCurrentOption("create") # after exiting each mode, we go back to "create" and this triggers post_init()
+            self.post_init()
         self.update()
 
     def keyPressEvent(self, event: QKeyEvent):
-        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
-            if self.current_mode == "create":
+        if self.current_mode == "create":
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
                 if len(self.new_one) > 2:
                     self.polygons.append(self.new_one[:-1])
-                self.new_one = []
-            if self.current_mode in {"rotate", "scale"} and self.relative_point_proposal:
+                self.post_init()
+            if event.key() == Qt.Key_Escape:
+                self.post_init()
+        if self.current_mode in {"rotate", "scale"} and self.relative_point_proposal:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
                 self.relative_point = self.relative_point_proposal
                 self.relative_point_proposal = None
-        if event.key() == Qt.Key_Escape:
-            if self.current_mode == "create":
-                self.new_one = []
         self.update()
-
