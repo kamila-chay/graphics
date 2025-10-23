@@ -282,6 +282,13 @@ class MainWindow(QMainWindow):
             self.polygons_button_group.addButton(button)
             main_options.addWidget(button)
 
+        self.save_polygons_button = QPushButton("save")
+        self.save_polygons_button.clicked.connect(self.save_file_polygons)
+        self.load_polygons_button = QPushButton("load")
+        self.load_polygons_button.clicked.connect(self.load_file_polygons)
+        main_options.addWidget(self.save_polygons_button)
+        main_options.addWidget(self.load_polygons_button)
+
         self.subtabs.addTab(main_options_widget, "Mouse")
 
         main_options_text_widget = QWidget()
@@ -330,7 +337,7 @@ class MainWindow(QMainWindow):
             if params := check_create_params_valid(self.create_params.text()):
                 self.polygons_canvas.create(params)
             else:
-                QMessageBox(self, "Error", "Invalid input for the creation of a polygon")
+                QMessageBox.warning(self, "Error", "Invalid input for the creation of a polygon")
         else:
             if self.polygons_canvas.get_selected_index() is None:
                 QMessageBox.warning(self, "Error", "You have to select a valid polygon first")
@@ -339,23 +346,23 @@ class MainWindow(QMainWindow):
                     if params := check_and_create_translate_params(self.translate_params.text()):
                         self.polygons_canvas.translate(params)
                     else:
-                        QMessageBox(self, "Error", "Invalid input for translation")
+                        QMessageBox.warning(self, "Error", "Invalid input for translation")
                 if opt == "rotate":
                     if point := check_and_create_point(self.rotate_relative_point.text()):
                         if params := check_and_create_generic_param(self.rotate_params.text()):
                             self.polygons_canvas.rotate(point, params)
                         else:
-                            QMessageBox(self, "Error", "Invalid input for rotation")
+                            QMessageBox.warning(self, "Error", "Invalid input for rotation")
                     else:
-                        QMessageBox(self, "Error", "Invalid input for rotation")
+                        QMessageBox.warning(self, "Error", "Invalid input for rotation")
                 if opt == "scale":
                     if point := check_and_create_point(self.scale_relative_point.text()):
                         if params := check_and_create_generic_param(self.scale_params.text()):
                             self.polygons_canvas.scale(point, params)
                         else:
-                            QMessageBox(self, "Error", "Invalid input for scaling")
+                            QMessageBox.warning(self, "Error", "Invalid input for scaling")
                     else:
-                        QMessageBox(self, "Error", "Invalid input for scaling")
+                        QMessageBox.warning(self, "Error", "Invalid input for scaling")
 
     def set_tool(self, tool):
         self.drawing_canvas.current_tool = tool
@@ -385,6 +392,16 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, 'Open JSON', filter='JSON Files (*.json)')
         if path:
             self.drawing_canvas.load_from_file(path)
+
+    def save_file_polygons(self):
+        path, _ = QFileDialog.getSaveFileName(self, 'Save JSON', filter='JSON Files (*.json)')
+        if path:
+            self.polygons_canvas.save_to_file(path)
+
+    def load_file_polygons(self):
+        path, _ = QFileDialog.getOpenFileName(self, 'Open JSON', filter='JSON Files (*.json)')
+        if path:
+            self.polygons_canvas.load_from_file(path)
 
     def load_image_file(self):
         path, _ = QFileDialog.getOpenFileName(self, 'Open image')

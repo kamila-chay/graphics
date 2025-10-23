@@ -33,6 +33,7 @@ class PolygonsCanvas(QWidget):
         self.relative_point_proposal = None
         self.ready_to_select = False
         self.selected_index = None
+        self.current_rel_point_from_text = None
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -79,6 +80,13 @@ class PolygonsCanvas(QWidget):
             radius = 5
             painter.drawEllipse(QPointF(x, y), radius, radius)
 
+        if self.current_rel_point_from_text:
+            x, y = self.current_rel_point_from_text
+            painter.setBrush(QColor("black"))
+            painter.setPen(QColor("black"))
+            radius = 5
+            painter.drawEllipse(QPointF(x, y), radius, radius)
+
     def setCurrentOption(self, opt):
         if opt != self.current_mode:
             self.mode_changed.emit(opt)
@@ -120,6 +128,7 @@ class PolygonsCanvas(QWidget):
 
     def create(self, params):
         self.polygons.append(params)
+        self.current_rel_point_from_text = None
         self.update()
 
     def rotate(self, rel_point, params):
@@ -140,7 +149,8 @@ class PolygonsCanvas(QWidget):
 
             point_transformed = total_transform @ point_homogenous
             self.polygons[self.selected_index][i] = point_transformed.tolist()[:2]
-
+        
+        self.current_rel_point_from_text = rel_point
         self.update()
 
     def scale(self, rel_point, params):
@@ -161,6 +171,7 @@ class PolygonsCanvas(QWidget):
             point_transformed = total_transform @ point_homogenous
             self.polygons[self.selected_index][i] = point_transformed.tolist()[:2]
 
+        self.current_rel_point_from_text = rel_point
         self.update()
 
     def translate(self, rel_point):
@@ -172,6 +183,7 @@ class PolygonsCanvas(QWidget):
             point_transformed = translate @ point_homogenous
             self.polygons[self.selected_index][i] = point_transformed.tolist()[:2]
 
+        self.current_rel_point_from_text = None
         self.update()
 
     def find_picked_index(self, x, y):
@@ -261,3 +273,13 @@ class PolygonsCanvas(QWidget):
                 self.relative_point = self.relative_point_proposal
                 self.relative_point_proposal = None
         self.update()
+
+    def load_from_file(self, path):
+        self.post_init()
+        with open(path, "r") as f:
+            self.polygons = json.load(f)
+
+
+    def save_to_file(self, path):
+       with open(path, "w") as f:
+          json.dump(self.polygons, f)
