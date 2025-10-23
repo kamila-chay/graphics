@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox, QFileDialog, QButtonGroup, QTabWidget, QSlider, QLabel, QMessageBox, QTextEdit, QSizePolicy
 )
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Slot
 
 from color_picker import ColorPicker
 from canvas import Canvas
@@ -13,6 +13,7 @@ from constants import slider_style_sheet
 from utils import transform_text_to_kernel
 from image_canvas import ImageCanvas
 from polygons_canvas import PolygonsCanvas
+from utils import check_create_params_valid, check_and_create_generic_param, check_and_create_point, check_and_create_translate_params
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -264,11 +265,14 @@ class MainWindow(QMainWindow):
 
     def init_polygons_tab(self):
         layout = QVBoxLayout(self.polygons_tab)
-        
+
+        self.subtabs = QTabWidget()
+        self.subtabs.currentChanged.connect(self.handle_changed_tabs)
         self.polygons_button_group = QButtonGroup(self)
         self.polygons_button_group.setExclusive(True)
 
-        main_options = QHBoxLayout()
+        main_options_widget = QWidget()
+        main_options = QHBoxLayout(main_options_widget)
         for button_name in ["create", "translate", "rotate", "scale"]:
             button = QPushButton(button_name)
             button.setCheckable(True)
@@ -278,11 +282,41 @@ class MainWindow(QMainWindow):
             self.polygons_button_group.addButton(button)
             main_options.addWidget(button)
 
-        layout.addLayout(main_options)
+        self.subtabs.addTab(main_options_widget, "Mouse")
+
+        main_options_text_widget = QWidget()
+        main_options_text = QHBoxLayout(main_options_text_widget)
+        for button_name in ["create", "translate", "rotate", "scale"]:
+            if button_name  in {"create", "translate"}:
+                setattr(self, f"{button_name}_params", QLineEdit())
+                main_options_text.addWidget(getattr(self, f"{button_name}_params"))
+                getattr(self, f"{button_name}_params").setPlaceholderText("params")
+            if button_name  in {"rotate", "scale"}:
+                setattr(self, f"{button_name}_relative_point", QLineEdit())
+                getattr(self, f"{button_name}_relative_point").setPlaceholderText("point")
+                main_options_text.addWidget(getattr(self, f"{button_name}_relative_point"))
+                setattr(self, f"{button_name}_params", QLineEdit())
+                main_options_text.addWidget(getattr(self, f"{button_name}_params"))
+                getattr(self, f"{button_name}_params").setPlaceholderText("params")
+            button = QPushButton(button_name)
+            button.clicked.connect(lambda checked, opt=button_name : self.polygon_apply(opt=opt))
+            main_options_text.addWidget(button)
+
+        self.subtabs.addTab(main_options_text_widget, "Text")
+        layout.addWidget(self.subtabs, stretch=0)
 
         self.polygons_canvas = PolygonsCanvas()
         self.polygons_canvas.mode_changed.connect(self.setButtonPolygonMode)
-        layout.addWidget(self.polygons_canvas)
+        layout.addWidget(self.polygons_canvas, stretch=1)
+
+    @Slot(int)
+    def handle_changed_tabs(self, new_index):
+        if hasattr(self, "polygons_canvas"):
+            if self.subtabs.tabText(new_index).lower() == "text":
+                self.polygons_canvas.setCurrentOption("text")
+                self.polygons_canvas.setReadyToSelect(True)
+            else:
+                self.polygons_canvas.setCurrentOption("create")
 
     def polygon_option(self, opt):
         self.polygons_canvas.setCurrentOption(opt)
@@ -290,6 +324,38 @@ class MainWindow(QMainWindow):
     def setButtonPolygonMode(self, new_value):
         for b in self.polygons_button_group.buttons():
             b.setChecked(b.text() == new_value)
+
+    def polygon_apply(self, opt):
+        if opt == "create":
+            if params := check_create_params_valid(self.create_params.text()):
+                self.polygons_canvas.create(params)
+            else:
+                QMessageBox(self, "Error", "Invalid input for the creation of a polygon")
+        else:
+            if self.polygons_canvas.get_selected_index() is None:
+                QMessageBox.warning(self, "Error", "You have to select a valid polygon first")
+            else:
+                if opt == "translate":
+                    if params := check_and_create_translate_params(self.translate_params.text()):
+                        self.polygons_canvas.translate(params)
+                    else:
+                        QMessageBox(self, "Error", "Invalid input for translation")
+                if opt == "rotate":
+                    if point := check_and_create_point(self.rotate_relative_point.text()):
+                        if params := check_and_create_generic_param(self.rotate_params.text()):
+                            self.polygons_canvas.rotate(point, params)
+                        else:
+                            QMessageBox(self, "Error", "Invalid input for rotation")
+                    else:
+                        QMessageBox(self, "Error", "Invalid input for rotation")
+                if opt == "scale":
+                    if point := check_and_create_point(self.scale_relative_point.text()):
+                        if params := check_and_create_generic_param(self.scale_params.text()):
+                            self.polygons_canvas.scale(point, params)
+                        else:
+                            QMessageBox(self, "Error", "Invalid input for scaling")
+                    else:
+                        QMessageBox(self, "Error", "Invalid input for scaling")
 
     def set_tool(self, tool):
         self.drawing_canvas.current_tool = tool

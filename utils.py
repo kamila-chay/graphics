@@ -27,3 +27,41 @@ def create_ds_kernel(kernel):
             ds_kernel[ii][jj] = (ds_kernel[ii][jj], j, i)
 
     return [el for row in ds_kernel for el in row]
+
+def check_create_params_valid(text):
+    points = text.split(";")
+    if len(points) < 2:
+        return False
+    res = []
+    for point in points:
+        coords = point.split(",")
+        if len(coords) != 2:
+            return False
+        try:
+            coords = list(map(float, coords))
+        except:
+            return False
+        res.append(coords)
+    return res
+        
+
+def check_and_create_point(text):
+    point = text.split(",")
+    if len(point) != 2:
+        return False
+    try:
+        point = list(map(float, point))
+    except:
+        return False
+    return point
+
+def check_and_create_generic_param(text):
+    try:
+        res = float(text)
+    except:
+        return False
+    return res
+
+def check_and_create_translate_params(text):
+    return check_and_create_point(text)
+    

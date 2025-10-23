@@ -31,15 +31,19 @@ class PolygonsCanvas(QWidget):
         self.updated = None
         self.relative_point = None
         self.relative_point_proposal = None
+        self.ready_to_select = False
+        self.selected_index = None
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(255, 255, 255))
-        painter.setBrush(QColor("skyblue"))
         painter.setPen(QColor("black"))
         for i, polygon in enumerate(self.polygons):
+            painter.setBrush(QColor("skyblue"))
             if i == self.picked_index:
                 continue
+            if i == self.selected_index:
+                painter.setBrush(QColor("pink"))
             curr_points = []
             for point in polygon:
                 curr_points.append(QPointF(point[0], point[1]))
@@ -81,6 +85,9 @@ class PolygonsCanvas(QWidget):
             self.current_mode = opt
             self.post_init()
 
+    def setReadyToSelect(self, value):
+        self.ready_to_select = value
+
     def mousePressEvent(self, event):
         pos = event.position()
         x, y = pos.x(), pos.y()
@@ -97,7 +104,7 @@ class PolygonsCanvas(QWidget):
                 if self.picked_index is not None:
                     self.start_point_translate = [x, y]
                     self.updated = copy.deepcopy(self.polygons[self.picked_index])
-            else:
+            elif self.current_mode in {"scale", "rotate"}:
                 if self.relative_point:
                     self.picked_index = self.find_picked_index(x, y)
                     if self.picked_index is not None:
@@ -105,6 +112,65 @@ class PolygonsCanvas(QWidget):
                         self.updated = copy.deepcopy(self.polygons[self.picked_index])
                 else:
                     self.relative_point_proposal = [x, y]
+            elif self.current_mode == "text":
+                if self.ready_to_select:
+                    self.selected_index = self.find_picked_index(x, y)
+
+        self.update()
+
+    def create(self, params):
+        self.polygons.append(params)
+        self.update()
+
+    def rotate(self, rel_point, params):
+        params = math.radians(params)
+        for i, point in enumerate(self.polygons[self.selected_index]):
+            point_homogenous = np.array(point + [1])
+            translate_negative = np.array([[1, 0, -rel_point[0]],
+                                           [0, 1, -rel_point[1]],
+                                           [0, 0, 1]])
+            translate_positive = np.array([[1, 0, rel_point[0]],
+                                           [0, 1, rel_point[1]],
+                                           [0, 0, 1]])
+            
+            rotate_transform = np.array([[math.cos(params), -math.sin(params), 0],
+                                         [math.sin(params), math.cos(params), 0],
+                                         [0, 0, 1]])
+            total_transform = translate_positive @ rotate_transform @ translate_negative
+
+            point_transformed = total_transform @ point_homogenous
+            self.polygons[self.selected_index][i] = point_transformed.tolist()[:2]
+
+        self.update()
+
+    def scale(self, rel_point, params):
+        for i, point in enumerate(self.polygons[self.selected_index]):
+            point_homogenous = np.array(point + [1])
+            translate_negative = np.array([[1, 0, -rel_point[0]],
+                                           [0, 1, -rel_point[1]],
+                                           [0, 0, 1]])
+            translate_positive = np.array([[1, 0, rel_point[0]],
+                                           [0, 1, rel_point[1]],
+                                           [0, 0, 1]])
+            
+            scale_transform = np.array([[params, 0, 0],
+                                        [0, params, 0],
+                                        [0, 0, 1]])
+            total_transform = translate_positive @ scale_transform @ translate_negative
+
+            point_transformed = total_transform @ point_homogenous
+            self.polygons[self.selected_index][i] = point_transformed.tolist()[:2]
+
+        self.update()
+
+    def translate(self, rel_point):
+        for i, point in enumerate(self.polygons[self.selected_index]):
+            point_homogenous = np.array(point + [1])
+            translate = np.array([[1, 0, rel_point[0]],
+                                  [0, 1, rel_point[1]],
+                                  [0, 0, 1]])
+            point_transformed = translate @ point_homogenous
+            self.polygons[self.selected_index][i] = point_transformed.tolist()[:2]
 
         self.update()
 
@@ -118,12 +184,16 @@ class PolygonsCanvas(QWidget):
             if polygon.containsPoint(point_of_interest, Qt.WindingFill):
                 return len(self.polygons)-i
         return None
+    
+    def get_selected_index(self):
+        return self.selected_index
 
     def mouseMoveEvent(self, event):
         pos = event.position()
         x, y = pos.x(), pos.y()
         if self.current_mode == "create" and self.new_one:
             self.new_one[-1] = [x, y]
+            self.update()
         if self.current_mode == "translate" and self.start_point_translate:
             x_old, y_old = self.start_point_translate
             translate_matrix = np.array([[1, 0, x - x_old],
@@ -133,6 +203,7 @@ class PolygonsCanvas(QWidget):
                 point_homogenous = np.array(point + [1])
                 new_point = translate_matrix @ point_homogenous
                 self.updated[i] = [new_point[0], new_point[1]]
+            self.update()
         if self.current_mode in {"rotate", "scale"} and self.start_point_rotate_scale:
             translate_negative = np.array([[1, 0, -self.relative_point[0]],
                                            [0, 1, -self.relative_point[1]],
@@ -169,13 +240,13 @@ class PolygonsCanvas(QWidget):
                     new_point = transform_total @ point_homogenous
                     self.updated[i] = [new_point[0], new_point[1]]
 
-        self.update()
+            self.update()
 
     def mouseReleaseEvent(self, event):
         if self.current_mode in {"translate", "rotate", "scale"} and self.picked_index is not None:
             self.polygons[self.picked_index] = self.updated
             self.post_init()
-        self.update()
+            self.update()
 
     def keyPressEvent(self, event: QKeyEvent):
         if self.current_mode == "create":
